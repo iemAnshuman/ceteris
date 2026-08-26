@@ -93,12 +93,12 @@
     "execution.command": {
       "p": "wrapped command line",
       "s": "value",
-      "v": "mpirun -n 2 ./pingpong_O3 262144 50"
+      "v": "mpirun -n 2 ./pp 1048576 200"
     },
     "execution.workdir": {
       "p": "os.getcwd()",
       "s": "value",
-      "v": "/private/tmp/ceteris-smoke"
+      "v": "/private/tmp/clone-smoke"
     },
     "hardware.arch": {
       "p": "platform.uname().machine",
@@ -451,7 +451,7 @@
     "source.repo_path": {
       "p": "--repo",
       "s": "value",
-      "v": "/private/tmp/ceteris-smoke"
+      "v": "/private/tmp/clone-smoke"
     },
     "source.submodules": {
       "d": "not inside a git repository",
@@ -460,10 +460,10 @@
     }
   },
   "meta": {
-    "captured_at": "2026-08-26T17:48:46+00:00",
-    "content_hash": "37ccab28ed39b80f821e16b28c9290618bd8750f07af3c3a9626b3e837ce1ef8",
+    "captured_at": "2026-08-26T18:02:22+00:00",
+    "content_hash": "efe00fdd34cda69acec562b1317330cc84c11e4036b5186be1cd1ca72c33de52",
     "kind": "run",
-    "label": "smoke2",
+    "label": "rep2",
     "schema_version": 1,
     "tool": "ceteris",
     "tool_version": "0.1.0"
@@ -472,15 +472,15 @@
     "bw": {
       "p": "regex /bandwidth ([0-9.]+) GB/s/",
       "s": "value",
-      "v": 42.625
+      "v": 50.183
     }
   },
   "run": {
     "drift": [],
-    "duration_s": 0.058,
+    "duration_s": 0.065,
     "exit_code": 0,
-    "output": "size 262144 bytes  iters 50  bandwidth 42.625 GB/s\n",
+    "output": "size 1048576 bytes  iters 200  bandwidth 50.183 GB/s\n",
     "output_truncated": false,
-    "started_at": "2026-08-26T17:48:46+00:00"
+    "started_at": "2026-08-26T18:02:22+00:00"
   }
 }

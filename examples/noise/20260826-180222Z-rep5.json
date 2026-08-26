@@ -1,0 +1,486 @@
+{
+  "fields": {
+    "build.cmake.CMAKE_BUILD_TYPE": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_CUDA_ARCHITECTURES": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_CUDA_FLAGS": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_CXX_COMPILER": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_CXX_FLAGS": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_CXX_FLAGS_RELEASE": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_CXX_FLAGS_RELWITHDEBINFO": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_CXX_STANDARD": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.HPX_WITH_MALLOC": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.HPX_WITH_MAX_CPU_COUNT": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.HPX_WITH_PARCELPORT_LCI": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.HPX_WITH_PARCELPORT_MPI": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake_cache_path": {
+      "d": "no --cmake-cache given",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.compiler_id": {
+      "p": "c++ --version",
+      "s": "value",
+      "v": "apple-clang"
+    },
+    "build.compiler_path": {
+      "p": "default c++ on PATH",
+      "s": "value",
+      "v": "/usr/bin/c++"
+    },
+    "build.compiler_version": {
+      "p": "c++ --version",
+      "s": "value",
+      "v": "17.0.0"
+    },
+    "build.cxx_flags": {
+      "d": "no --cxx-flags, $CXXFLAGS, or CMake cache",
+      "p": "--cxx-flags",
+      "s": "not_applicable"
+    },
+    "build.type": {
+      "d": "no --build-type or CMake cache",
+      "p": "--build-type",
+      "s": "not_applicable"
+    },
+    "execution.command": {
+      "p": "wrapped command line",
+      "s": "value",
+      "v": "mpirun -n 2 ./pp 1048576 200"
+    },
+    "execution.workdir": {
+      "p": "os.getcwd()",
+      "s": "value",
+      "v": "/private/tmp/clone-smoke"
+    },
+    "hardware.arch": {
+      "p": "platform.uname().machine",
+      "s": "value",
+      "v": "arm64"
+    },
+    "hardware.cpu_cores_logical": {
+      "p": "sysctl -n hw.logicalcpu",
+      "s": "value",
+      "v": 10
+    },
+    "hardware.cpu_cores_physical": {
+      "p": "sysctl -n hw.physicalcpu",
+      "s": "value",
+      "v": 10
+    },
+    "hardware.cpu_model": {
+      "p": "sysctl -n machdep.cpu.brand_string",
+      "s": "value",
+      "v": "Apple M4"
+    },
+    "hardware.cuda_runtime": {
+      "d": "nvcc not on PATH",
+      "p": "nvcc",
+      "s": "not_applicable"
+    },
+    "hardware.gpu_count": {
+      "d": "nvidia-smi not on PATH",
+      "p": "nvidia-smi",
+      "s": "not_applicable"
+    },
+    "hardware.gpu_driver": {
+      "d": "nvidia-smi not on PATH",
+      "p": "nvidia-smi",
+      "s": "not_applicable"
+    },
+    "hardware.gpu_models": {
+      "d": "nvidia-smi not on PATH",
+      "p": "nvidia-smi",
+      "s": "not_applicable"
+    },
+    "hardware.hostname": {
+      "p": "platform.uname().node",
+      "s": "value",
+      "v": "MacBook-Air-7.local"
+    },
+    "hardware.kernel": {
+      "p": "platform.uname().release",
+      "s": "value",
+      "v": "24.6.0"
+    },
+    "hardware.numa_nodes": {
+      "d": "darwin exposes no NUMA topology",
+      "p": "sysctl",
+      "s": "not_applicable"
+    },
+    "hardware.os": {
+      "p": "platform.uname().system",
+      "s": "value",
+      "v": "Darwin"
+    },
+    "hardware.os_version": {
+      "p": "platform",
+      "s": "value",
+      "v": "15.7.7"
+    },
+    "parallelism.binding_intent": {
+      "d": "no binding variables set",
+      "p": "environment",
+      "s": "not_applicable"
+    },
+    "parallelism.capture_process_affinity": {
+      "d": "Darwin exposes no CPU affinity API",
+      "p": "os.sched_getaffinity",
+      "s": "not_applicable"
+    },
+    "parallelism.ranks": {
+      "d": "no rank-count variable set (SLURM_NTASKS, PMI_SIZE, OMPI_COMM_WORLD_SIZE, MV2_COMM_WORLD_SIZE)",
+      "s": "not_applicable"
+    },
+    "parallelism.threads": {
+      "d": "no thread-count variable set (OMP_NUM_THREADS, HPX_NUM_THREADS)",
+      "s": "not_applicable"
+    },
+    "runtime.env.CUDA_LAUNCH_BLOCKING": {
+      "d": "unset",
+      "p": "$CUDA_LAUNCH_BLOCKING",
+      "s": "not_applicable"
+    },
+    "runtime.env.CUDA_VISIBLE_DEVICES": {
+      "d": "unset",
+      "p": "$CUDA_VISIBLE_DEVICES",
+      "s": "not_applicable"
+    },
+    "runtime.env.GOMP_CPU_AFFINITY": {
+      "d": "unset",
+      "p": "$GOMP_CPU_AFFINITY",
+      "s": "not_applicable"
+    },
+    "runtime.env.HPX_HAVE_NETWORKING": {
+      "d": "unset",
+      "p": "$HPX_HAVE_NETWORKING",
+      "s": "not_applicable"
+    },
+    "runtime.env.HPX_NUM_THREADS": {
+      "d": "unset",
+      "p": "$HPX_NUM_THREADS",
+      "s": "not_applicable"
+    },
+    "runtime.env.HPX_PARCEL_LCI_ENABLE": {
+      "d": "unset",
+      "p": "$HPX_PARCEL_LCI_ENABLE",
+      "s": "not_applicable"
+    },
+    "runtime.env.HPX_PARCEL_MPI_ENABLE": {
+      "d": "unset",
+      "p": "$HPX_PARCEL_MPI_ENABLE",
+      "s": "not_applicable"
+    },
+    "runtime.env.HPX_PARCEL_TCP_ENABLE": {
+      "d": "unset",
+      "p": "$HPX_PARCEL_TCP_ENABLE",
+      "s": "not_applicable"
+    },
+    "runtime.env.HPX_THREAD_BINDING": {
+      "d": "unset",
+      "p": "$HPX_THREAD_BINDING",
+      "s": "not_applicable"
+    },
+    "runtime.env.I_MPI_FABRICS": {
+      "d": "unset",
+      "p": "$I_MPI_FABRICS",
+      "s": "not_applicable"
+    },
+    "runtime.env.I_MPI_PIN": {
+      "d": "unset",
+      "p": "$I_MPI_PIN",
+      "s": "not_applicable"
+    },
+    "runtime.env.I_MPI_PIN_DOMAIN": {
+      "d": "unset",
+      "p": "$I_MPI_PIN_DOMAIN",
+      "s": "not_applicable"
+    },
+    "runtime.env.KMP_AFFINITY": {
+      "d": "unset",
+      "p": "$KMP_AFFINITY",
+      "s": "not_applicable"
+    },
+    "runtime.env.LCI_ATTR_MAX_CQ_SIZE": {
+      "d": "unset",
+      "p": "$LCI_ATTR_MAX_CQ_SIZE",
+      "s": "not_applicable"
+    },
+    "runtime.env.LCI_ATTR_MAX_RECVS": {
+      "d": "unset",
+      "p": "$LCI_ATTR_MAX_RECVS",
+      "s": "not_applicable"
+    },
+    "runtime.env.LCI_ATTR_MAX_SENDS": {
+      "d": "unset",
+      "p": "$LCI_ATTR_MAX_SENDS",
+      "s": "not_applicable"
+    },
+    "runtime.env.LCI_ATTR_PACKET_SIZE": {
+      "d": "unset",
+      "p": "$LCI_ATTR_PACKET_SIZE",
+      "s": "not_applicable"
+    },
+    "runtime.env.LCI_IBV_ENABLE_TD": {
+      "d": "unset",
+      "p": "$LCI_IBV_ENABLE_TD",
+      "s": "not_applicable"
+    },
+    "runtime.env.LCI_PACKET_SIZE": {
+      "d": "unset",
+      "p": "$LCI_PACKET_SIZE",
+      "s": "not_applicable"
+    },
+    "runtime.env.LCI_SERVER": {
+      "d": "unset",
+      "p": "$LCI_SERVER",
+      "s": "not_applicable"
+    },
+    "runtime.env.LCI_USE_DREG": {
+      "d": "unset",
+      "p": "$LCI_USE_DREG",
+      "s": "not_applicable"
+    },
+    "runtime.env.MPICH_ASYNC_PROGRESS": {
+      "d": "unset",
+      "p": "$MPICH_ASYNC_PROGRESS",
+      "s": "not_applicable"
+    },
+    "runtime.env.MPICH_NEMESIS_NETMOD": {
+      "d": "unset",
+      "p": "$MPICH_NEMESIS_NETMOD",
+      "s": "not_applicable"
+    },
+    "runtime.env.NVIDIA_VISIBLE_DEVICES": {
+      "d": "unset",
+      "p": "$NVIDIA_VISIBLE_DEVICES",
+      "s": "not_applicable"
+    },
+    "runtime.env.OMPI_MCA_btl": {
+      "d": "unset",
+      "p": "$OMPI_MCA_btl",
+      "s": "not_applicable"
+    },
+    "runtime.env.OMPI_MCA_coll": {
+      "d": "unset",
+      "p": "$OMPI_MCA_coll",
+      "s": "not_applicable"
+    },
+    "runtime.env.OMPI_MCA_osc": {
+      "d": "unset",
+      "p": "$OMPI_MCA_osc",
+      "s": "not_applicable"
+    },
+    "runtime.env.OMPI_MCA_pml": {
+      "d": "unset",
+      "p": "$OMPI_MCA_pml",
+      "s": "not_applicable"
+    },
+    "runtime.env.OMP_NUM_THREADS": {
+      "d": "unset",
+      "p": "$OMP_NUM_THREADS",
+      "s": "not_applicable"
+    },
+    "runtime.env.OMP_PLACES": {
+      "d": "unset",
+      "p": "$OMP_PLACES",
+      "s": "not_applicable"
+    },
+    "runtime.env.OMP_PROC_BIND": {
+      "d": "unset",
+      "p": "$OMP_PROC_BIND",
+      "s": "not_applicable"
+    },
+    "runtime.env.OMP_SCHEDULE": {
+      "d": "unset",
+      "p": "$OMP_SCHEDULE",
+      "s": "not_applicable"
+    },
+    "runtime.env.UCX_IB_GID_INDEX": {
+      "d": "unset",
+      "p": "$UCX_IB_GID_INDEX",
+      "s": "not_applicable"
+    },
+    "runtime.env.UCX_NET_DEVICES": {
+      "d": "unset",
+      "p": "$UCX_NET_DEVICES",
+      "s": "not_applicable"
+    },
+    "runtime.env.UCX_RNDV_THRESH": {
+      "d": "unset",
+      "p": "$UCX_RNDV_THRESH",
+      "s": "not_applicable"
+    },
+    "runtime.env.UCX_TLS": {
+      "d": "unset",
+      "p": "$UCX_TLS",
+      "s": "not_applicable"
+    },
+    "runtime.mpi_implementation": {
+      "p": "mpirun --version",
+      "s": "value",
+      "v": "Open MPI"
+    },
+    "runtime.mpi_launcher": {
+      "p": "shutil.which('mpirun')",
+      "s": "value",
+      "v": "/opt/homebrew/bin/mpirun"
+    },
+    "runtime.mpi_version": {
+      "p": "mpirun --version",
+      "s": "value",
+      "v": "5.0.9"
+    },
+    "runtime.transport_configured": {
+      "d": "no transport-selecting variable set",
+      "p": "environment",
+      "s": "not_applicable"
+    },
+    "scheduler.cpus_per_task": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_CPUS_PER_TASK",
+      "s": "not_applicable"
+    },
+    "scheduler.gpus": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_GPUS_ON_NODE",
+      "s": "not_applicable"
+    },
+    "scheduler.job_id": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_JOB_ID",
+      "s": "not_applicable"
+    },
+    "scheduler.job_name": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_JOB_NAME",
+      "s": "not_applicable"
+    },
+    "scheduler.nnodes": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_JOB_NUM_NODES",
+      "s": "not_applicable"
+    },
+    "scheduler.nodelist": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_JOB_NODELIST",
+      "s": "not_applicable"
+    },
+    "scheduler.ntasks": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_NTASKS",
+      "s": "not_applicable"
+    },
+    "scheduler.ntasks_per_node": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_NTASKS_PER_NODE",
+      "s": "not_applicable"
+    },
+    "scheduler.partition": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_JOB_PARTITION",
+      "s": "not_applicable"
+    },
+    "scheduler.submit_dir": {
+      "d": "not running under Slurm",
+      "p": "$SLURM_SUBMIT_DIR",
+      "s": "not_applicable"
+    },
+    "source.branch": {
+      "d": "not inside a git repository",
+      "p": "git rev-parse --show-toplevel",
+      "s": "not_applicable"
+    },
+    "source.commit": {
+      "d": "not inside a git repository",
+      "p": "git rev-parse --show-toplevel",
+      "s": "not_applicable"
+    },
+    "source.dirty": {
+      "d": "not inside a git repository",
+      "p": "git rev-parse --show-toplevel",
+      "s": "not_applicable"
+    },
+    "source.repo_path": {
+      "p": "--repo",
+      "s": "value",
+      "v": "/private/tmp/clone-smoke"
+    },
+    "source.submodules": {
+      "d": "not inside a git repository",
+      "p": "git rev-parse --show-toplevel",
+      "s": "not_applicable"
+    }
+  },
+  "meta": {
+    "captured_at": "2026-08-26T18:02:22+00:00",
+    "content_hash": "efe00fdd34cda69acec562b1317330cc84c11e4036b5186be1cd1ca72c33de52",
+    "kind": "run",
+    "label": "rep5",
+    "schema_version": 1,
+    "tool": "ceteris",
+    "tool_version": "0.1.0"
+  },
+  "metrics": {
+    "bw": {
+      "p": "regex /bandwidth ([0-9.]+) GB/s/",
+      "s": "value",
+      "v": 52.376
+    }
+  },
+  "run": {
+    "drift": [],
+    "duration_s": 0.065,
+    "exit_code": 0,
+    "output": "size 1048576 bytes  iters 200  bandwidth 52.376 GB/s\n",
+    "output_truncated": false,
+    "started_at": "2026-08-26T18:02:22+00:00"
+  }
+}

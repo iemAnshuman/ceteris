@@ -93,19 +93,25 @@ $ ceteris list
   tuned-O0  2026-08-26T17:47:28          38.165     0
 ```
 
-### It has to certify, too
+### It has to certify, too -- and the noise floor is the real yardstick
 
-A gate that always fails is a gate nobody keeps. Two runs of the *identical*
+A gate that always fails is a gate nobody keeps. Eight runs of the *identical*
 configuration, same binary and same command:
 
 ```console
-$ ceteris compare examples/run-repeat-1.json examples/run-repeat-2.json
-2 runs compared. Declared varying: nothing
+$ ceteris compare examples/noise/*.json
+8 runs compared. Declared varying: nothing
 
 MEASUREMENTS:
-  run            bw  exit      wall
-  smoke      44.356     0     0.20s
-  smoke2     42.625     0     0.06s
+  run          bw  exit      wall
+  rep1     53.898     0     0.06s
+  rep2     50.183     0     0.07s
+  rep3     56.918     0     0.07s
+  rep4     52.825     0     0.07s
+  rep5     52.376     0     0.07s
+  rep6     56.044     0     0.07s
+  rep7     52.252     0     0.07s
+  rep8     55.568     0     0.07s
 
 Matched on 92 other fields.
 
@@ -114,11 +120,18 @@ $ echo $?
 0
 ```
 
-Certified, and the 4% spread between them is this machine's run-to-run
-noise. That number is also the yardstick for reading the 10% gap above: a
-difference only a couple of times larger than the noise floor is exactly the
-kind of result that should not be attributed to anything until the comparison
-is known to be clean.
+All eight certify, which is the behaviour a usable gate needs. But look at the
+numbers: 50.2 to 56.9 GB/s, a **13% spread with nothing changed at all.**
+
+That is larger than the 10% gap between `-O3` and `-O0` in the quickstart. So
+the headline difference up there is not merely confounded by an undeclared
+build change -- it sits *inside this machine's noise band* and means nothing on
+its own. Two runs is not a measurement.
+
+`ceteris` does not compute that for you, and v1 makes no claim about
+statistical significance. What it does is stop you comparing the two numbers
+in the first place unless the runs producing them were actually comparable,
+which is the precondition for any of the rest of it being worth doing.
 
 ## Why wrapping the run is the whole point
 

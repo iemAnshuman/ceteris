@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ceteris"
+version = "0.1.0"
+description = "Capture benchmark run environment fingerprints and gate comparisons between them."
+readme = "README.md"
+requires-python = ">=3.11"
+# No runtime dependencies. Everything used is standard library:
+# argparse, dataclasses, enum, fnmatch, hashlib, json, os, platform,
+# shutil, subprocess, tomllib (3.11+). tomllib is the only reason for
+# the 3.11 floor; JSON config files are also accepted so a cluster with
+# an older interpreter is not locked out of configuring the tool.
+dependencies = []
+authors = [{ name = "Anshuman Agrawal" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Benchmark",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+ceteris = "ceteris.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ceteris = ["defaults.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,84 @@
+# Shipped defaults. A user config (--config) is merged over this: lists are
+# replaced by union, tables are updated key-by-key. Which env vars and build
+# keys matter differs per project, which is the whole reason this file is data
+# and not code.
+
+[capture]
+# Environment variables snapshotted verbatim. An unset variable is captured as
+# not_applicable, so "tuned vs default" shows up as a difference rather than as
+# two absent values that quietly match.
+env_allowlist = [
+  "LCI_ATTR_PACKET_SIZE", "LCI_SERVER", "LCI_ATTR_MAX_SENDS", "LCI_ATTR_MAX_RECVS",
+  "LCI_ATTR_MAX_CQ_SIZE", "LCI_IBV_ENABLE_TD", "LCI_USE_DREG", "LCI_PACKET_SIZE",
+  "OMPI_MCA_pml", "OMPI_MCA_btl", "OMPI_MCA_osc", "OMPI_MCA_coll",
+  "UCX_TLS", "UCX_NET_DEVICES", "UCX_IB_GID_INDEX", "UCX_RNDV_THRESH",
+  "MPICH_ASYNC_PROGRESS", "MPICH_NEMESIS_NETMOD",
+  "OMP_NUM_THREADS", "OMP_PROC_BIND", "OMP_PLACES", "OMP_SCHEDULE",
+  "HPX_NUM_THREADS", "HPX_THREAD_BINDING", "HPX_PARCEL_TCP_ENABLE",
+  "HPX_PARCEL_LCI_ENABLE", "HPX_PARCEL_MPI_ENABLE", "HPX_HAVE_NETWORKING",
+  "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES", "CUDA_LAUNCH_BLOCKING",
+  "I_MPI_PIN", "I_MPI_PIN_DOMAIN", "I_MPI_FABRICS",
+  "GOMP_CPU_AFFINITY", "KMP_AFFINITY",
+]
+
+# CMakeCache.txt entries pulled when --cmake-cache points at a build tree.
+cmake_keys = [
+  "CMAKE_BUILD_TYPE", "CMAKE_CXX_COMPILER", "CMAKE_CXX_FLAGS",
+  "CMAKE_CXX_FLAGS_RELEASE", "CMAKE_CXX_FLAGS_RELWITHDEBINFO",
+  "CMAKE_CXX_STANDARD", "CMAKE_CUDA_ARCHITECTURES", "CMAKE_CUDA_FLAGS",
+  "HPX_WITH_PARCELPORT_LCI", "HPX_WITH_PARCELPORT_MPI",
+  "HPX_WITH_MAX_CPU_COUNT", "HPX_WITH_MALLOC",
+]
+
+# Severity decides what gates. Patterns are fnmatch globs, longest match wins.
+# Anything unlisted defaults to "material", so a field added in a later version
+# gates by default rather than silently escaping the check.
+[severity]
+"source.commit" = "critical"
+"source.dirty" = "critical"
+"source.submodules" = "critical"
+"source.branch" = "informational"
+"source.repo_path" = "informational"
+
+"build.*" = "critical"
+
+"runtime.env.*" = "critical"
+"runtime.mpi_*" = "material"
+"runtime.transport_configured" = "material"
+
+"parallelism.*" = "material"
+
+"hardware.hostname" = "informational"
+"hardware.hostnames" = "informational"
+"hardware.os_version" = "material"
+"hardware.*" = "material"
+
+"scheduler.job_id" = "informational"
+"scheduler.job_name" = "informational"
+"scheduler.submit_dir" = "informational"
+"scheduler.*" = "material"
+
+# The wrapped command line is where rank counts and binding flags actually
+# live, so a change to it is as invalidating as a change to the build.
+"execution.command" = "critical"
+"execution.workdir" = "informational"
+
+# Comparators normalise before grouping. The displayed value is always the raw
+# one; only the grouping key is normalised.
+[comparators]
+"build.cxx_flags" = "flagset"
+"build.cmake.CMAKE_CXX_FLAGS*" = "flagset"
+"build.cmake.CMAKE_CUDA_FLAGS" = "flagset"
+"source.repo_path" = "path"
+"scheduler.submit_dir" = "path"
+"hardware.hostnames" = "set"
+"hardware.gpu_models" = "set"
+
+# Metrics extracted from `ceteris run` output. Empty by default because the
+# output format is yours; set them in a project config. Each pattern needs
+# exactly one capture group. A pattern that does not match records "unknown"
+# rather than a plausible number.
+#
+#   [metrics]
+#   bandwidth_gbs = "Bandwidth:\\s+([0-9.]+)\\s+GB/s"
+[metrics]

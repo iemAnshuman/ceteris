@@ -58,6 +58,13 @@ cmake_keys = [
 "scheduler.submit_dir" = "informational"
 "scheduler.*" = "material"
 
+# System state. These are what the benchmarking guides tell you to pin down
+# by hand. Load and memory are informational: they vary between any two
+# moments and gating on them would fail every comparison.
+"system.load_1m" = "informational"
+"system.mem_available_mb" = "informational"
+"system.*" = "material"
+
 # The wrapped command line is where rank counts and binding flags actually
 # live, so a change to it is as invalidating as a change to the build.
 # The command is split into launcher / launcher args / program / program args

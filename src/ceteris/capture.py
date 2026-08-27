@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as _dt
 import platform
 
+from . import nodes
 from .collectors import Context, run_all
 from .config import Config
 from .model import Fingerprint
@@ -37,6 +38,13 @@ def capture(
         build_type=build_type,
     )
     fields = run_all(ctx)
+    capture_args = []
+    for flag, val in (
+        ("--repo", repo), ("--cmake-cache", cmake_cache), ("--compiler", compiler),
+        ("--cxx-flags", cxx_flags), ("--build-type", build_type),
+    ):
+        if val is not None:
+            capture_args += [f"{flag}={val}"]
     meta = {
         "label": label or platform.uname().node,
         # captured_at lives in meta and never in the comparable body, so two
@@ -47,4 +55,8 @@ def capture(
         "tool": "ceteris",
         "tool_version": __version__,
     }
-    return Fingerprint(fields=fields, meta=meta)
+    fingerprint = Fingerprint(fields=fields, meta=meta)
+    # Under a multi-node allocation this fans out one capture per node and
+    # merges the node-local fields; on a single host it only normalises the
+    # hostname fields so single- and multi-node records share a schema.
+    return nodes.apply(fingerprint, capture_args)

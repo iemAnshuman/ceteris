@@ -48,8 +48,8 @@ cmake_keys = [
 
 "parallelism.*" = "material"
 
-"hardware.hostname" = "informational"
 "hardware.hostnames" = "informational"
+"hardware.node_count" = "material"
 "hardware.os_version" = "material"
 "hardware.*" = "material"
 

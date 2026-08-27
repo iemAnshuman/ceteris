@@ -17,7 +17,7 @@ def test_defaults_load():
 
 def test_longest_glob_wins():
     cfg = Config.load()
-    assert cfg.severity_of("hardware.hostname") == "informational"
+    assert cfg.severity_of("hardware.hostnames") == "informational"
     assert cfg.severity_of("hardware.cpu_model") == "material"
 
 
@@ -29,12 +29,12 @@ def test_user_config_extends_the_env_allowlist(tmp_path):
     user = tmp_path / "ceteris.toml"
     user.write_text(
         '[capture]\nenv_allowlist = ["MY_PROJECT_TUNABLE"]\n'
-        '[severity]\n"hardware.hostname" = "critical"\n'
+        '[severity]\n"hardware.hostnames" = "critical"\n'
     )
     cfg = Config.load(user)
     assert "MY_PROJECT_TUNABLE" in cfg.env_allowlist
     assert "LCI_ATTR_PACKET_SIZE" in cfg.env_allowlist  # defaults are kept
-    assert cfg.severity_of("hardware.hostname") == "critical"
+    assert cfg.severity_of("hardware.hostnames") == "critical"
 
 
 def test_json_config_is_accepted_for_old_interpreters(tmp_path):

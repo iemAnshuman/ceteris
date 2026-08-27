@@ -60,8 +60,16 @@ cmake_keys = [
 
 # The wrapped command line is where rank counts and binding flags actually
 # live, so a change to it is as invalidating as a change to the build.
-"execution.command" = "critical"
+# The command is split into launcher / launcher args / program / program args
+# so each part can be declared on its own. The verbatim command is kept as
+# ground truth but is informational, since its parts carry the gating.
+"execution.command" = "informational"
 "execution.workdir" = "informational"
+"execution.launcher" = "critical"
+"execution.launcher_args" = "critical"
+"execution.program" = "critical"
+"execution.program_args" = "critical"
+"execution.program_sha256" = "critical"
 
 # Comparators normalise before grouping. The displayed value is always the raw
 # one; only the grouping key is normalised.
@@ -73,6 +81,7 @@ cmake_keys = [
 "scheduler.submit_dir" = "path"
 "hardware.hostnames" = "set"
 "hardware.gpu_models" = "set"
+"execution.launcher_args" = "flagset"
 
 # Metrics extracted from `ceteris run` output. Empty by default because the
 # output format is yours; set them in a project config. Each pattern needs

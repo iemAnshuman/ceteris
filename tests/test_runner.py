@@ -44,10 +44,10 @@ def test_the_launcher_command_line_is_a_comparable_field(cfg):
     """`mpirun -n 16 --bind-to core` is where rank count and binding intent
     actually live. A standalone capture cannot see it."""
     record = run_command([sys.executable, "-c", "pass"], cfg=cfg, echo=False)
-    field = record.fields["execution.command"]
-    assert field.state is State.VALUE
-    assert "-c" in field.value
-    assert cfg.severity_of("execution.command") == "critical"
+    assert "-c" in record.fields["execution.command"].value
+    assert record.fields["execution.program_args"].value == ["-c", "pass"]
+    assert cfg.severity_of("execution.program_args") == "critical"
+    assert cfg.severity_of("execution.launcher_args") == "critical"
 
 
 def test_two_runs_of_different_commands_do_not_certify(cfg):
@@ -55,7 +55,7 @@ def test_two_runs_of_different_commands_do_not_certify(cfg):
     b = run_command([sys.executable, "-c", "x = 1"], cfg=cfg, echo=False, label="b")
     report = compare([a, b], cfg=cfg)
     assert report.exit_code != 0
-    assert any(r.path == "execution.command" for r in report.violations)
+    assert any(r.path == "execution.program_args" for r in report.violations)
 
 
 def test_mid_run_environment_change_is_detected(cfg, tmp_path):

@@ -28,6 +28,7 @@ import sys
 import time
 from typing import Any
 
+from . import execution
 from .capture import capture
 from .config import Config
 from .metrics import extract
@@ -108,10 +109,7 @@ def run_command(
     after = capture(label=label, **kwargs)
 
     fields = dict(before.fields)
-    fields["execution.command"] = value(
-        " ".join(command), provenance="wrapped command line"
-    )
-    fields["execution.workdir"] = value(os.getcwd(), provenance="os.getcwd()")
+    fields.update(execution.collect(command))
 
     truncated = len(output) > MAX_OUTPUT
     record: dict[str, Any] = {

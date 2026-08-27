@@ -48,6 +48,17 @@ class Config:
 
     @classmethod
     def load(cls, user_path: str | Path | None = None) -> "Config":
+        """Load defaults, then the project config.
+
+        With no explicit path, ./ceteris.toml (or ./ceteris.json) is used if
+        present, so a project's metric patterns and tuning variables apply
+        without every command repeating --config.
+        """
+        if user_path is None:
+            for candidate in ("ceteris.toml", "ceteris.json"):
+                if Path(candidate).is_file():
+                    user_path = candidate
+                    break
         raw = _load_file(DEFAULTS_PATH)
         cfg = cls(
             env_allowlist=list(raw.get("capture", {}).get("env_allowlist", [])),

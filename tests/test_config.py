@@ -50,3 +50,10 @@ def test_invalid_severity_is_rejected_loudly(tmp_path):
     user.write_text(json.dumps({"severity": {"a.b": "extremely-critical"}}))
     with pytest.raises(ValueError, match="expected one of"):
         Config.load(user)
+
+
+def test_project_config_in_cwd_is_discovered(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "ceteris.toml").write_text('[metrics]\nbw = "x ([0-9]+)"\n')
+    assert Config.load().metrics == {"bw": "x ([0-9]+)"}
+    monkeypatch.chdir(tmp_path.parent)

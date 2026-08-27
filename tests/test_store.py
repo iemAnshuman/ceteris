@@ -58,3 +58,17 @@ def test_env_var_sets_the_default_store(monkeypatch, tmp_path: Path):
     assert store_mod.store_path() == tmp_path / "elsewhere"
     monkeypatch.delenv("CETERIS_STORE")
     assert store_mod.store_path() == Path(store_mod.DEFAULT_STORE)
+
+
+def test_the_store_ignores_itself_so_it_does_not_dirty_the_repo(tmp_path: Path):
+    """First-time-user path: two identical runs in a clean repo must compare
+    clean. Without this the tool's own output flips source.dirty."""
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    store = tmp_path / ".ceteris" / "runs"
+    store_mod.save(make("r1", "2026-08-26T10:00:00+00:00"), store)
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=tmp_path, capture_output=True, text=True
+    ).stdout
+    assert status.strip() == "", status

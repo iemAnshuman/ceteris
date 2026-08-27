@@ -31,8 +31,24 @@ def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", text).strip("-") or "run"
 
 
-def save(fingerprint: Fingerprint, store: Path) -> Path:
+def ensure(store: Path) -> None:
+    """Create the store and make it ignore itself.
+
+    The default store lives inside the user's repository. Without this, the
+    first run leaves the tree dirty, the second run captures source.dirty as
+    True, and the user's very first comparison fails because of the tool that
+    is supposed to be checking it. Writing a self-ignoring .gitignore into the
+    store directory is what .pytest_cache and .mypy_cache do, and it avoids
+    touching the user's own .gitignore.
+    """
     store.mkdir(parents=True, exist_ok=True)
+    marker = store.parent / ".gitignore" if store.name == "runs" else store / ".gitignore"
+    if not marker.exists():
+        marker.write_text("# created by ceteris; the run store is not source\n*\n")
+
+
+def save(fingerprint: Fingerprint, store: Path) -> Path:
+    ensure(store)
     stamp = str(fingerprint.meta.get("captured_at", "")).replace(":", "").replace("-", "")
     stamp = stamp.replace("+0000", "Z").replace("T", "-")[:16] or "run"
     path = store / f"{stamp}-{_slug(fingerprint.label)}.json"

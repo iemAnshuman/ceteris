@@ -30,7 +30,7 @@ from typing import Any
 
 from . import execution
 from .capture import capture
-from .config import Config
+from .config import GATING_SEVERITIES, Config
 from .metrics import extract
 from .model import Field, Fingerprint, State, value
 
@@ -43,9 +43,17 @@ def _display(field: Field) -> str:
     return f"<{field.state.value}>"
 
 
-def _drift(before: dict[str, Field], after: dict[str, Field]) -> list[dict[str, Any]]:
+def _drift(before: dict[str, Field], after: dict[str, Field], cfg: Config) -> list[dict[str, Any]]:
+    """Fields that changed between the before and after captures.
+
+    Only gating fields count. Load average and available memory move between
+    any two moments; treating that as the environment changing would mark
+    every run uncertifiable.
+    """
     changed = []
     for path in sorted(set(before) | set(after)):
+        if cfg.severity_of(path) not in GATING_SEVERITIES:
+            continue
         old, new = before.get(path), after.get(path)
         if old is None or new is None or old != new:
             changed.append(
@@ -69,6 +77,8 @@ def run_command(
     build_type: str | None = None,
     metric_patterns: dict[str, str] | None = None,
     echo: bool = True,
+    series: str | None = None,
+    repeat: int | None = None,
 ) -> Fingerprint:
     """Capture, run the command, capture again, and assemble one record."""
     cfg = cfg or Config.load()
@@ -118,7 +128,7 @@ def run_command(
         "duration_s": round(duration, 3),
         "output": output[-MAX_OUTPUT:],
         "output_truncated": truncated,
-        "drift": _drift(before.fields, after.fields),
+        "drift": _drift(before.fields, after.fields, cfg),
     }
 
     patterns = dict(getattr(cfg, "metrics", {}) or {})
@@ -127,4 +137,29 @@ def run_command(
 
     meta = dict(before.meta)
     meta["kind"] = "run"
+    if series:
+        meta["series"] = series
+    if repeat is not None:
+        meta["repeat"] = repeat
     return Fingerprint(fields=fields, meta=meta, run=record, metrics=metrics)
+
+
+def run_repeated(command: list[str], repeats: int, label: str | None = None, **kwargs) -> list[Fingerprint]:
+    """Run the command `repeats` times; one record each, sharing a series id.
+
+    Records that capture an identical environment share a content hash, and
+    compare groups by that hash, so repeats need no other bookkeeping. Each
+    repeat captures before and after on its own, so drift inside any one of
+    them is still detected.
+    """
+    if repeats < 1:
+        raise ValueError("repeats must be at least 1")
+    out: list[Fingerprint] = []
+    series = None
+    for i in range(1, repeats + 1):
+        record = run_command(command, label=label, series=series, repeat=i, **kwargs)
+        if series is None:
+            series = f"{record.label}@{record.run['started_at']}"
+            record.meta["series"] = series
+        out.append(record)
+    return out

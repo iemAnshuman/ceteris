@@ -95,3 +95,16 @@ def test_mid_run_environment_change_is_detected(cfg, tmp_path):
 def test_a_command_that_cannot_launch_is_a_clean_error(cfg):
     with pytest.raises(ValueError, match="could not launch"):
         run_command(["definitely-not-a-real-binary-xyz"], cfg=cfg, echo=False)
+
+
+def test_informational_fields_moving_mid_run_are_not_drift(cfg, monkeypatch):
+    """Load average changes between any two captures. That is not the
+    environment changing, and must not make every run uncertifiable."""
+    from ceteris import runner
+    from ceteris.model import value
+
+    before = {"system.load_1m": value(1.0), "source.commit": value("abc")}
+    after = {"system.load_1m": value(7.5), "source.commit": value("abc")}
+    assert runner._drift(before, after, cfg) == []
+    after["source.commit"] = value("def")
+    assert [c["path"] for c in runner._drift(before, after, cfg)] == ["source.commit"]

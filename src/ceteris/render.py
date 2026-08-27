@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
+from collections import Counter
+
+from . import stats
 from .compare import Classification, FieldResult, Report
 from .model import Fingerprint, State
 
@@ -20,11 +23,16 @@ def _clip(text: str, width: int = MAX_VALUE) -> str:
     return text if len(text) <= width else text[: width - 1] + "…"
 
 
+def _who(labels: list[str]) -> str:
+    """Repeats share a label; show 'tuned-O3 x5' rather than five copies."""
+    counts = Counter(labels)
+    return ", ".join(f"{k} x{n}" if n > 1 else k for k, n in counts.items())
+
+
 def _groups_line(result: FieldResult) -> str:
     parts = []
     for group in result.groups:
-        who = ", ".join(group.labels)
-        parts.append(f"{_clip(group.display)} ({who})")
+        parts.append(f"{_clip(group.display)} ({_who(group.labels)})")
     return "  vs  ".join(parts)
 
 
@@ -50,33 +58,49 @@ def _metric_cell(field) -> str:
     return str(val)
 
 
-def _results_table(sources: Sequence[Fingerprint]) -> list[str]:
-    """Measurements next to the verdict. Metrics are never gated -- they are
-    the dependent variable and are supposed to differ."""
-    runs = [f for f in sources if f.run or f.metrics]
-    if not runs:
+def _fmt(x: float) -> str:
+    return f"{x:.4g}"
+
+
+def _results_table(report: Report) -> list[str]:
+    """Measurements per configuration. Metrics are never gated -- they are
+    the dependent variable. Configurations are records with identical
+    comparable bodies, so repeats fold together without any bookkeeping."""
+    configs = [g for g in report.configs if any(fp.run or fp.metrics for fp in g.members)]
+    if not configs:
         return []
-    names: list[str] = []
-    for fingerprint in runs:
-        for name in sorted(fingerprint.metrics):
-            if name not in names:
-                names.append(name)
-    label_w = max(len(f.label) for f in runs)
-    header = "  " + "run".ljust(label_w)
-    widths = [max(len(n), 9) for n in names]
-    for name, w in zip(names, widths):
-        header += "  " + name.rjust(w)
-    header += "  " + "exit".rjust(4) + "  " + "wall".rjust(8)
-    lines = ["MEASUREMENTS:", header]
-    for fingerprint in runs:
-        row = "  " + fingerprint.label.ljust(label_w)
-        for name, w in zip(names, widths):
-            row += "  " + _metric_cell(fingerprint.metrics.get(name)).rjust(w)
-        code = fingerprint.run.get("exit_code")
-        secs = fingerprint.run.get("duration_s")
-        row += "  " + ("-" if code is None else str(code)).rjust(4)
-        row += "  " + ("-" if secs is None else f"{secs:.2f}s").rjust(8)
-        lines.append(row)
+    names = stats.metric_names(configs)
+    lines = ["MEASUREMENTS (per configuration):"]
+    if not names:
+        for g in configs:
+            codes = {fp.run.get("exit_code") for fp in g.members}
+            lines.append(f"  {g.label:<14} n={g.n:<3} exit={','.join(str(c) for c in sorted(codes, key=str))}")
+        lines.append("")
+        return lines
+    w = max(len(g.label) for g in configs)
+    lines.append(f"  {'configuration':<{w}}  {'n':>3}  {'metric':<16} {'min':>10} {'median':>10} {'max':>10} {'spread':>7}")
+    for g in configs:
+        for name in names:
+            st = stats.stats_for(g, name)
+            if st is None:
+                bad = next((fp.metrics.get(name) for fp in g.members if fp.metrics.get(name)), None)
+                why = f"<{bad.state.value}>" if bad else "-"
+                lines.append(f"  {g.label:<{w}}  {g.n:>3}  {name:<16} {why:>10}")
+                continue
+            lines.append(
+                f"  {g.label:<{w}}  {st.n:>3}  {name:<16} {_fmt(st.lo):>10} {_fmt(st.med):>10} {_fmt(st.hi):>10} {st.spread:>6.0%}"
+            )
+    lines.append("")
+    return lines
+
+
+def _noise_section(report: Report) -> list[str]:
+    if not report.noise:
+        return []
+    lines = ["NOISE FLOOR:"]
+    for v in report.noise:
+        tag = "unassessed" if not v.assessed else ("WITHIN NOISE" if v.within_noise else "signal")
+        lines.append(f"  {v.metric:<16} {tag:<13} {v.reason}")
     lines.append("")
     return lines
 
@@ -126,7 +150,12 @@ def render(report: Report) -> str:
     width = max((len(r.path) for r in interesting), default=20)
     width = min(width, 34)
 
-    out.extend(_results_table(report.sources))
+    for w in report.warnings:
+        out.append(f"WARNING: {w}")
+    if report.warnings:
+        out.append("")
+    out.extend(_results_table(report))
+    out.extend(_noise_section(report))
 
     if report.drifted:
         out.append("ENVIRONMENT CHANGED DURING THE RUN (not certifiable):")
@@ -153,8 +182,7 @@ def render(report: Report) -> str:
             for label, why in result.indeterminate:
                 out.append(f"      {label}: {why}")
             for group in result.groups:
-                who = ", ".join(group.labels)
-                out.append(f"      {who}: known, {_clip(group.display)}")
+                out.append(f"      {_who(group.labels)}: known, {_clip(group.display)}")
         out.append("")
 
     if report.unmatched_declarations:
@@ -186,9 +214,16 @@ def render(report: Report) -> str:
 
     out.append(f"Matched on {report.matched_count} other fields.")
 
-    if report.exit_code == 0:
+    code = report.exit_code
+    if code == 0:
         out.append("")
-        out.append("OK: every difference was declared. Comparison is valid.")
+        if any(v.assessed and v.within_noise for v in report.noise):
+            out.append("OK: every difference was declared -- but see NOISE FLOOR: the measured gap is not a result.")
+        else:
+            out.append("OK: every difference was declared. Comparison is valid.")
+    elif code == 4:
+        out.append("")
+        out.append("NOT A RESULT: the comparison is valid but no metric shows a gap above the noise floor.")
     return "\n".join(out) + "\n"
 
 
@@ -202,6 +237,19 @@ def to_json(report: Report) -> dict[str, Any]:
         "unmatched_declarations": report.unmatched_declarations,
         "exit_code": report.exit_code,
         "matched": report.matched_count,
+        "warnings": report.warnings,
+        "configurations": [
+            {"label": g.label, "content_hash": g.content_hash, "n": g.n,
+             "runs": [fp.label for fp in g.members],
+             "metrics": {m: (lambda st: st and {"n": st.n, "min": st.lo, "median": st.med, "max": st.hi, "spread": st.spread})(stats.stats_for(g, m))
+                         for m in stats.metric_names(report.configs)}}
+            for g in report.configs
+        ],
+        "noise": [
+            {"metric": v.metric, "assessed": v.assessed, "within_noise": v.within_noise,
+             "gap": v.gap, "noise": v.noise, "reason": v.reason}
+            for v in report.noise
+        ],
         "fields": [
             {
                 "path": r.path,

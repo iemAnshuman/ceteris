@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Hashable, Iterable, Sequence
 
-from . import comparators
+from . import comparators, stats
 from .config import GATING_SEVERITIES, Config
 from .model import Fingerprint, State
 
@@ -23,6 +23,7 @@ EXIT_OK = 0
 EXIT_UNDECLARED = 1
 EXIT_INDETERMINATE = 2
 EXIT_USAGE = 3
+EXIT_WITHIN_NOISE = 4
 
 
 class Verdict(str, Enum):
@@ -108,6 +109,12 @@ class Report:
     # thirty as suspicious would bury the three.
     constant_declarations: list[str] = field(default_factory=list)
     unmatched_declarations: list[str] = field(default_factory=list)
+    # Statistical half of validity: records grouped into configurations by
+    # content hash, and a noise verdict per metric.
+    configs: list[stats.ConfigGroup] = field(default_factory=list)
+    noise: list[stats.NoiseVerdict] = field(default_factory=list)
+    require_signal: bool = False
+    warnings: list[str] = field(default_factory=list)
 
     def by_class(self, *classes: Classification) -> list[FieldResult]:
         wanted = set(classes)
@@ -135,6 +142,8 @@ class Report:
             return EXIT_INDETERMINATE
         if self.strict and (self.constant_declarations or self.unmatched_declarations):
             return EXIT_UNDECLARED
+        if self.require_signal and self.noise and not any(v.assessed and not v.within_noise for v in self.noise):
+            return EXIT_WITHIN_NOISE
         return EXIT_OK
 
     @property
@@ -206,6 +215,7 @@ def compare(
     waive: dict[str, str] | None = None,
     cfg: Config | None = None,
     strict: bool = False,
+    require_signal: bool = False,
 ) -> Report:
     if len(fingerprints) < 2:
         raise ValueError("compare needs at least two fingerprints")
@@ -268,6 +278,16 @@ def compare(
         elif all(r.verdict is Verdict.MATCH for r in covered):
             constant.append(pattern)
 
+    configs = stats.group_configs(fingerprints)
+    noise = [stats.noise_verdict(configs, m) for m in stats.metric_names(configs)]
+    warnings = []
+    versions = sorted({fp.schema_version for fp in fingerprints})
+    if len(versions) > 1:
+        warnings.append(
+            f"records use schema versions {versions}; fields added in a newer "
+            "version are unknown on the older side and are reported as such"
+        )
+
     return Report(
         labels=[fp.label for fp in fingerprints],
         declared=vary,
@@ -277,4 +297,8 @@ def compare(
         sources=list(fingerprints),
         constant_declarations=constant,
         unmatched_declarations=unmatched,
+        configs=configs,
+        noise=noise,
+        require_signal=require_signal,
+        warnings=warnings,
     )

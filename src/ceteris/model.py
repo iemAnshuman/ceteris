@@ -21,7 +21,7 @@ from dataclasses import dataclass, field as dcfield
 from enum import Enum
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class State(str, Enum):
@@ -123,6 +123,13 @@ class Fingerprint:
     @property
     def label(self) -> str:
         return str(self.meta.get("label") or "unnamed")
+
+    @property
+    def schema_version(self) -> int:
+        try:
+            return int(self.meta.get("schema_version", 1))
+        except (TypeError, ValueError):
+            return 1
 
     @property
     def drift(self) -> list[dict[str, Any]]:

@@ -64,6 +64,8 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="NAME=REGEX",
         help="extract a number from the run output. Repeatable.",
     )
+    run.add_argument("--repeats", type=int, default=1, metavar="N",
+                     help="run the command N times, one record each (default 1)")
     run.add_argument("--no-store", action="store_true", help="do not record to the store")
     run.add_argument("-o", "--output", help="also write the record here")
     run.add_argument("-q", "--quiet", action="store_true", help="do not echo run output")
@@ -112,6 +114,8 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also gate on informational fields and on declared fields that did not vary",
     )
+    cmp_.add_argument("--require-signal", action="store_true",
+                      help="exit 4 unless some metric's gap exceeds the noise floor (needs >= 3 repeats per configuration)")
     cmp_.add_argument("--config", help="TOML or JSON config extending the defaults")
     cmp_.add_argument("--json", action="store_true", help="machine-readable report")
     return parser
@@ -185,6 +189,7 @@ def _cmd_compare(args) -> int:
         waive=_parse_waivers(args.waive),
         cfg=cfg,
         strict=args.strict,
+        require_signal=args.require_signal,
     )
     if args.json:
         sys.stdout.write(json.dumps(to_json(report), indent=2, sort_keys=True) + "\n")
@@ -194,7 +199,7 @@ def _cmd_compare(args) -> int:
 
 
 def _cmd_run(args) -> int:
-    from .runner import run_command
+    from .runner import run_repeated
 
     command = list(args.command)
     if command and command[0] == "--":
@@ -205,8 +210,9 @@ def _cmd_run(args) -> int:
             "e.g. ceteris run --label a -- mpirun -n 2 ./bench"
         )
     cfg = Config.load(args.config)
-    record = run_command(
+    records = run_repeated(
         command,
+        args.repeats,
         label=args.label,
         cfg=cfg,
         repo=args.repo,
@@ -217,19 +223,26 @@ def _cmd_run(args) -> int:
         metric_patterns=parse_cli_metrics(args.metric),
         echo=not args.quiet,
     )
-    if args.output:
-        Path(args.output).write_text(record.dumps(), encoding="utf-8")
-    if not args.no_store:
-        path = store_mod.save(record, store_mod.store_path(args.store))
-        sys.stderr.write(f"ceteris: recorded {path}\n")
-    if record.drift:
-        sys.stderr.write(
-            f"ceteris: WARNING -- the environment changed during this run "
-            f"({len(record.drift)} field(s)); this run is not certifiable\n"
+    worst = 0
+    for record in records:
+        if args.output and len(records) == 1:
+            Path(args.output).write_text(record.dumps(), encoding="utf-8")
+        if not args.no_store:
+            path = store_mod.save(record, store_mod.store_path(args.store))
+            sys.stderr.write(f"ceteris: recorded {path}\n")
+        if record.drift:
+            sys.stderr.write(
+                f"ceteris: WARNING -- the environment changed during this run "
+                f"({len(record.drift)} field(s)); this run is not certifiable\n"
+            )
+        worst = max(worst, int(record.run.get("exit_code", 0)))
+    if args.output and len(records) > 1:
+        Path(args.output).write_text(
+            json.dumps([r.to_json() for r in records], indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
     # The wrapped command's exit code is passed through so that wrapping a
     # benchmark in ceteris does not change how a surrounding script behaves.
-    return int(record.run.get("exit_code", 0))
+    return worst
 
 
 def _cmd_list(args) -> int:

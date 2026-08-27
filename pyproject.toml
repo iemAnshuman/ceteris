@@ -43,6 +43,9 @@ dev = ["pytest>=7"]
 [project.scripts]
 ceteris = "ceteris.cli:main"
 
+[project.entry-points.pytest11]
+ceteris = "ceteris.pytest_plugin"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

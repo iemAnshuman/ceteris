@@ -130,15 +130,22 @@
       "p": "nvidia-smi",
       "s": "not_applicable"
     },
-    "hardware.hostname": {
+    "hardware.hostnames": {
       "p": "platform.uname().node",
       "s": "value",
-      "v": "MacBook-Air-7.local"
+      "v": [
+        "MacBook-Air-7.local"
+      ]
     },
     "hardware.kernel": {
       "p": "platform.uname().release",
       "s": "value",
       "v": "24.6.0"
+    },
+    "hardware.node_count": {
+      "p": "single-host capture",
+      "s": "value",
+      "v": 1
     },
     "hardware.numa_nodes": {
       "d": "darwin exposes no NUMA topology",
@@ -170,9 +177,8 @@
       "s": "not_applicable"
     },
     "parallelism.threads": {
-      "p": "$OMP_NUM_THREADS",
-      "s": "value",
-      "v": "10"
+      "d": "no thread-count variable set (OMP_NUM_THREADS, HPX_NUM_THREADS)",
+      "s": "not_applicable"
     },
     "runtime.env.CUDA_LAUNCH_BLOCKING": {
       "d": "unset",
@@ -255,9 +261,9 @@
       "s": "not_applicable"
     },
     "runtime.env.LCI_ATTR_PACKET_SIZE": {
+      "d": "unset",
       "p": "$LCI_ATTR_PACKET_SIZE",
-      "s": "value",
-      "v": "73728"
+      "s": "not_applicable"
     },
     "runtime.env.LCI_IBV_ENABLE_TD": {
       "d": "unset",
@@ -315,9 +321,9 @@
       "s": "not_applicable"
     },
     "runtime.env.OMP_NUM_THREADS": {
+      "d": "unset",
       "p": "$OMP_NUM_THREADS",
-      "s": "value",
-      "v": "10"
+      "s": "not_applicable"
     },
     "runtime.env.OMP_PLACES": {
       "d": "unset",
@@ -451,8 +457,8 @@
     }
   },
   "meta": {
-    "captured_at": "2026-08-26T17:28:20+00:00",
-    "content_hash": "2a5c962ccd6267d05c53e3f5857d011b2de4a907cfa36d5ca497e9cf43a5f017",
+    "captured_at": "2026-08-27T11:10:53+00:00",
+    "content_hash": "d315410bcf3bcf27cab95a2dd447c14ef7cd31df41656e72fdaf3f4cec9859df",
     "label": "run-b-gpu-probe-failed",
     "schema_version": 1,
     "tool": "ceteris",

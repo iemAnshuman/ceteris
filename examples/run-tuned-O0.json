@@ -95,6 +95,37 @@
       "s": "value",
       "v": "mpirun -n 2 ./pingpong_O0 1048576 200"
     },
+    "execution.launcher": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": "mpirun"
+    },
+    "execution.launcher_args": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": [
+        "-n",
+        "2"
+      ]
+    },
+    "execution.program": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": "./pingpong_O0"
+    },
+    "execution.program_args": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": [
+        "1048576",
+        "200"
+      ]
+    },
+    "execution.program_sha256": {
+      "p": "sha256 of ./pingpong_O0",
+      "s": "value",
+      "v": "d82a3febc7d215d4d0c0d2d0d1293416a62b0b4adcd5c5221c4cf3796730c0f8"
+    },
     "execution.workdir": {
       "p": "os.getcwd()",
       "s": "value",
@@ -140,15 +171,22 @@
       "p": "nvidia-smi",
       "s": "not_applicable"
     },
-    "hardware.hostname": {
+    "hardware.hostnames": {
       "p": "platform.uname().node",
       "s": "value",
-      "v": "MacBook-Air-7.local"
+      "v": [
+        "MacBook-Air-7.local"
+      ]
     },
     "hardware.kernel": {
       "p": "platform.uname().release",
       "s": "value",
       "v": "24.6.0"
+    },
+    "hardware.node_count": {
+      "p": "single-host capture",
+      "s": "value",
+      "v": 1
     },
     "hardware.numa_nodes": {
       "d": "darwin exposes no NUMA topology",
@@ -439,9 +477,9 @@
       "v": "main"
     },
     "source.commit": {
-      "d": "repository has no commits yet",
-      "p": "git rev-list --all --count",
-      "s": "not_applicable"
+      "p": "git rev-parse HEAD",
+      "s": "value",
+      "v": "5e88fdb5280e4de0bd37acf8ede7332bc3768a5f"
     },
     "source.dirty": {
       "p": "git status --porcelain",
@@ -460,8 +498,8 @@
     }
   },
   "meta": {
-    "captured_at": "2026-08-26T17:47:28+00:00",
-    "content_hash": "b8b59dbbaf963da7b5c63014203a2ce8096d6d2d776f64dcbdf58392b3e555e8",
+    "captured_at": "2026-08-27T11:10:50+00:00",
+    "content_hash": "4efe6d854f491cb2e0fb6af6d62ae52e69136a0bf4837770784698bef57aeb7c",
     "kind": "run",
     "label": "tuned-O0",
     "schema_version": 1,
@@ -472,15 +510,15 @@
     "bandwidth_gbs": {
       "p": "regex /bandwidth ([0-9.]+) GB/s/",
       "s": "value",
-      "v": 38.165
+      "v": 51.269
     }
   },
   "run": {
     "drift": [],
-    "duration_s": 0.199,
+    "duration_s": 0.601,
     "exit_code": 0,
-    "output": "size 1048576 bytes  iters 200  bandwidth 38.165 GB/s\n",
+    "output": "size 1048576 bytes  iters 200  bandwidth 51.269 GB/s\n",
     "output_truncated": false,
-    "started_at": "2026-08-26T17:47:28+00:00"
+    "started_at": "2026-08-27T11:10:50+00:00"
   }
 }

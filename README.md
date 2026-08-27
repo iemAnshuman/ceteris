@@ -1,5 +1,7 @@
 # ceteris
 
+[![ci](https://github.com/iemAnshuman/ceteris/actions/workflows/ci.yml/badge.svg)](https://github.com/iemAnshuman/ceteris/actions/workflows/ci.yml)
+
 Wrap a benchmark run, and refuse to compare two numbers that are not comparable.
 
 Named for *ceteris paribus*, all other things being equal. That is the claim
@@ -7,14 +9,19 @@ every benchmark comparison makes, and it is the claim this tool checks.
 
 The failure it exists to catch is always shaped the same way: **you intended to
 vary one thing, something else varied too, and nothing told you.** A stale
-commit on one side. `-O2` against `-O3`. `LCI_ATTR_PACKET_SIZE` left at its
+build on one side. `-O2` against `-O3`. `LCI_ATTR_PACKET_SIZE` left at its
 8 KB default on one side and tuned to 73728 on the other, which is a ~35x
-performance cliff that reads exactly like an algorithmic result.
+performance cliff that reads exactly like an algorithmic result. One node in a
+sixteen-node allocation running a different driver.
 
 Experiment trackers record metrics. None of them answer *are these two numbers
 even comparable?*
 
 ## Quickstart
+
+```sh
+pipx install git+https://github.com/iemAnshuman/ceteris.git
+```
 
 Two real runs of an MPI ping-pong benchmark on the machine this README was
 written on, an Apple M4. The benchmark is [`examples/pingpong.c`](examples/pingpong.c);
@@ -27,14 +34,14 @@ $ mpicc -O0 -o pingpong_O0 examples/pingpong.c
 $ ceteris run --label tuned-O3 --compiler mpicc --cxx-flags -O3 \
       --metric 'bandwidth_gbs=bandwidth ([0-9.]+) GB/s' \
       -- mpirun -n 2 ./pingpong_O3 1048576 200
-size 1048576 bytes  iters 200  bandwidth 41.801 GB/s
-ceteris: recorded .ceteris/runs/20260826-174727Z-tuned-O3.json
+size 1048576 bytes  iters 200  bandwidth 30.850 GB/s
+ceteris: recorded .ceteris/runs/20260827-111049Z-tuned-O3.json
 
 $ ceteris run --label tuned-O0 --compiler mpicc --cxx-flags -O0 \
       --metric 'bandwidth_gbs=bandwidth ([0-9.]+) GB/s' \
       -- mpirun -n 2 ./pingpong_O0 1048576 200
-size 1048576 bytes  iters 200  bandwidth 38.165 GB/s
-ceteris: recorded .ceteris/runs/20260826-174728Z-tuned-O0.json
+size 1048576 bytes  iters 200  bandwidth 51.269 GB/s
+ceteris: recorded .ceteris/runs/20260827-111050Z-tuned-O0.json
 ```
 
 `ceteris run` captured the environment, ran the benchmark, captured again, and
@@ -47,50 +54,79 @@ $ ceteris compare --last 2
 
 MEASUREMENTS:
   run       bandwidth_gbs  exit      wall
-  tuned-O3         41.801     0     0.23s
-  tuned-O0         38.165     0     0.20s
+  tuned-O3          30.85     0     0.52s
+  tuned-O0         51.269     0     0.60s
 
 UNDECLARED DIFFERENCES (comparison is not valid):
-  build.cxx_flags    -O3 (tuned-O3)  vs  -O0 (tuned-O0)
-  execution.command  mpirun -n 2 ./pingpong_O3 1048576 200 (tuned-O3)  vs  mpirun -n 2 ./pingpong_O0 1048576 200 (tuned-O0)
+  build.cxx_flags           -O3 (tuned-O3)  vs  -O0 (tuned-O0)
+  execution.program         ./pingpong_O3 (tuned-O3)  vs  ./pingpong_O0 (tuned-O0)
+  execution.program_sha256  56d7060c5d6ea948be9d66f482b7614b0240ffde7b4a3… (tuned-O3)  vs  d82a3febc7d215d4d0c0d2d0d1293416a62b0b4adcd5c… (tuned-O0)
 
-Matched on 90 other fields.
+DIFFERS, NOT GATING (informational severity):
+  execution.command         mpirun -n 2 ./pingpong_O3 1048576 200 (tuned-O3)  vs  mpirun -n 2 ./pingpong_O0 1048576 200 (tuned-O0)
+
+Matched on 94 other fields.
 $ echo $?
 1
 ```
 
-There is a 10% gap between those two numbers. The tool's answer is not
-"-O3 is 10% faster" -- it is **you may not draw that conclusion**,
-because the build flags and the command line both changed and neither was
+There is a 66% gap between those two numbers, and in this particular pair
+the *unoptimised* build came out ahead. The tool's answer is not "-O0 is
+66% faster" -- it is **you may not draw that conclusion**, because the build
+flags, the program and its binary hash all changed and none of it was
 declared. Once they are declared, the comparison certifies:
 
 ```console
-$ ceteris compare --last 2 --vary build.cxx_flags --vary execution.command
-2 runs compared. Declared varying: build.cxx_flags, execution.command
+$ ceteris compare --last 2 --vary build.cxx_flags --vary 'execution.program*'
+2 runs compared. Declared varying: build.cxx_flags, execution.program*
 
 MEASUREMENTS:
   run       bandwidth_gbs  exit      wall
-  tuned-O3         41.801     0     0.23s
-  tuned-O0         38.165     0     0.20s
+  tuned-O3          30.85     0     0.52s
+  tuned-O0         51.269     0     0.60s
 
 DECLARED VARYING (expected):
-  build.cxx_flags    -O3 (tuned-O3)  vs  -O0 (tuned-O0)
-  execution.command  mpirun -n 2 ./pingpong_O3 1048576 200 (tuned-O3)  vs  mpirun -n 2 ./pingpong_O0 1048576 200 (tuned-O0)
+  build.cxx_flags           -O3 (tuned-O3)  vs  -O0 (tuned-O0)
+  execution.program         ./pingpong_O3 (tuned-O3)  vs  ./pingpong_O0 (tuned-O0)
+  execution.program_sha256  56d7060c5d6ea948be9d66f482b7614b0240ffde7b4a3… (tuned-O3)  vs  d82a3febc7d215d4d0c0d2d0d1293416a62b0b4adcd5c… (tuned-O0)
 
-Matched on 90 other fields.
+DIFFERS, NOT GATING (informational severity):
+  execution.command         mpirun -n 2 ./pingpong_O3 1048576 200 (tuned-O3)  vs  mpirun -n 2 ./pingpong_O0 1048576 200 (tuned-O0)
+
+Matched on 94 other fields.
 
 OK: every difference was declared. Comparison is valid.
 $ echo $?
 0
 ```
 
-```console
-$ ceteris list
-2 runs in .ceteris/runs
+Declaring only the flags is not enough, and that is deliberate: the binary
+hash is its own field, because **a stale build is the most common invalid
+comparison there is and git cannot see it.** The tree is clean, the commit is
+right, and the binary predates the last change.
 
-  run       when                  bandwidth_gbs  exit
-  tuned-O3  2026-08-26T17:47:27          41.801     0
-  tuned-O0  2026-08-26T17:47:28          38.165     0
+```console
+$ ceteris compare --last 2 --vary build.cxx_flags
+2 runs compared. Declared varying: build.cxx_flags
+
+MEASUREMENTS:
+  run       bandwidth_gbs  exit      wall
+  tuned-O3          30.85     0     0.52s
+  tuned-O0         51.269     0     0.60s
+
+UNDECLARED DIFFERENCES (comparison is not valid):
+  execution.program         ./pingpong_O3 (tuned-O3)  vs  ./pingpong_O0 (tuned-O0)
+  execution.program_sha256  56d7060c5d6ea948be9d66f482b7614b0240ffde7b4a3… (tuned-O3)  vs  d82a3febc7d215d4d0c0d2d0d1293416a62b0b4adcd5c… (tuned-O0)
+
+DECLARED VARYING (expected):
+  build.cxx_flags           -O3 (tuned-O3)  vs  -O0 (tuned-O0)
+
+DIFFERS, NOT GATING (informational severity):
+  execution.command         mpirun -n 2 ./pingpong_O3 1048576 200 (tuned-O3)  vs  mpirun -n 2 ./pingpong_O0 1048576 200 (tuned-O0)
+
+Matched on 94 other fields.
+$ echo $?
+1
 ```
 
 ### It has to certify, too -- and the noise floor is the real yardstick
@@ -104,34 +140,31 @@ $ ceteris compare examples/noise/*.json
 
 MEASUREMENTS:
   run          bw  exit      wall
-  rep1     53.898     0     0.06s
-  rep2     50.183     0     0.07s
-  rep3     56.918     0     0.07s
-  rep4     52.825     0     0.07s
-  rep5     52.376     0     0.07s
-  rep6     56.044     0     0.07s
-  rep7     52.252     0     0.07s
-  rep8     55.568     0     0.07s
+  rep1     48.965     0     0.07s
+  rep2     49.444     0     0.08s
+  rep3      45.97     0     0.07s
+  rep4     52.838     0     0.07s
+  rep5     48.244     0     0.07s
+  rep6     49.114     0     0.07s
+  rep7     48.166     0     0.07s
+  rep8     46.686     0     0.07s
 
-Matched on 92 other fields.
+Matched on 98 other fields.
 
 OK: every difference was declared. Comparison is valid.
 $ echo $?
 0
 ```
 
-All eight certify, which is the behaviour a usable gate needs. But look at the
-numbers: 50.2 to 56.9 GB/s, a **13% spread with nothing changed at all.**
+All eight certify. And the numbers run 46.0 to 52.8 GB/s, a **15% spread
+with nothing changed at all.** The quickstart pair sits well outside that
+band, in the wrong direction, and with nothing controlled there is no way to
+say what it measured: thermal state, a first-run effect, or the build. Two
+runs is not a measurement.
 
-That is larger than the 10% gap between `-O3` and `-O0` in the quickstart. So
-the headline difference up there is not merely confounded by an undeclared
-build change -- it sits *inside this machine's noise band* and means nothing on
-its own. Two runs is not a measurement.
-
-`ceteris` does not compute that for you, and v1 makes no claim about
-statistical significance. What it does is stop you comparing the two numbers
-in the first place unless the runs producing them were actually comparable,
-which is the precondition for any of the rest of it being worth doing.
+`ceteris` makes no claim about statistical significance. What it does is stop
+you comparing two numbers unless the runs producing them were actually
+comparable, which is the precondition for any of the rest being worth doing.
 
 ## Why wrapping the run is the whole point
 
@@ -141,36 +174,56 @@ reason the underlying problem exists: **it is bookkeeping, and bookkeeping is
 what already failed.** A tool you have to remember to use fails the way the
 discipline it replaces failed.
 
-Wrapping the run gets three things a standalone capture cannot have:
+Wrapping the run gets four things a standalone capture cannot have:
 
 1. **The fingerprint is taken in the job's own context.** Put `ceteris run`
-   inside an sbatch script and it sees the compute node, the allocation and the
-   job environment -- not the login node you happened to type on.
-2. **The launcher command line is recorded for real.** `mpirun -n 16
-   --bind-to core` is where rank count and binding intent actually live, and it
-   is captured rather than inferred.
-3. **The environment is captured before *and* after**, so a change that happens
-   mid-run -- a module swap, a rebuild into the same tree, a filesystem
-   remount -- is detected instead of silently splitting the run in half.
+   inside an sbatch script and it sees the compute nodes, the allocation and
+   the job environment -- not the login node you happened to type on.
+2. **The launcher command line is recorded for real** and split into launcher,
+   launcher arguments, program and program arguments, so `mpirun -n 16
+   --bind-to core` is captured rather than inferred, and sweeping a message
+   size passed as an argument does not also waive a change in rank count.
+3. **The benchmark binary is hashed**, so a rebuild is caught regardless of
+   what git says.
+4. **The environment is captured before *and* after**, so a change that happens
+   mid-run -- a module swap, a rebuild into the same tree -- is detected
+   instead of silently splitting the run in half.
 
 ## On a cluster
 
-`ceteris run` sits inside the batch script, wrapping the launcher:
+`ceteris run` sits inside the batch script, wrapping the launcher. A project
+config at `./ceteris.toml` is picked up automatically:
+
+```toml
+# ceteris.toml
+[metrics]
+latency_us = "avg latency ([0-9.]+) us"
+
+[capture]
+env_allowlist = ["MY_PROJECT_TUNABLE"]
+```
 
 ```bash
 #!/bin/bash
 #SBATCH -N 16 -n 256 -p buran
 
 module load gcc/13 openmpi/5
-
 export LCI_ATTR_PACKET_SIZE=73728
 
 ceteris run --label "lci-$LCI_ATTR_PACKET_SIZE-$SLURM_JOB_ID" \
     --repo ~/codes/hpx --cmake-cache ~/codes/hpx/build \
-    --metric 'latency_us=avg latency ([0-9.]+) us' \
     --store ~/campaigns/collectives \
     -- srun ./bench_all_to_all --size 4096
 ```
+
+**Every node is fingerprinted.** Under a multi-node allocation, capture fans
+out one short task per node with `srun` inside the allocation that already
+exists, and merges the node-local fields. A value identical on every node
+collapses to one; a value that differs becomes `[value, node count]` pairs, so
+two allocations with the same hardware mix compare equal regardless of which
+hosts they landed on, and one node with a different driver shows up as a
+difference. A node that fails to report makes every hardware field `unknown`:
+fifteen of sixteen nodes is not a fingerprint of the allocation.
 
 Then, after the campaign:
 
@@ -181,26 +234,6 @@ ceteris compare --store ~/campaigns/collectives --label 'lci-*' \
 
 Non-zero exit means the campaign is confounded, so it gates a script directly.
 
-## Install
-
-```sh
-pipx install .
-```
-
-Python 3.11 or newer. **No runtime dependencies** -- everything used is
-standard library. `pytest` is needed only to run the tests.
-
-Also importable as a library:
-
-```python
-from ceteris import capture, compare
-from ceteris.runner import run_command
-
-a = run_command(["mpirun", "-n", "2", "./bench"], label="a")
-b = run_command(["mpirun", "-n", "2", "./bench"], label="b")
-assert compare([a, b]).exit_code == 0
-```
-
 ## The commands
 
 | | |
@@ -210,15 +243,28 @@ assert compare([a, b]).exit_code == 0
 | `ceteris list` | show recorded runs and their numbers |
 | `ceteris capture` | emit a fingerprint alone, without running anything |
 
-Runs land in `.ceteris/runs` by default; `--store` or `$CETERIS_STORE` moves
-that. `compare` takes files directly, or selects with `--last N` and
-`--label GLOB`.
+Runs land in `.ceteris/runs` by default, which ignores itself so it never
+dirties your repository; `--store` or `$CETERIS_STORE` moves it. `compare`
+takes files directly, or selects with `--last N` and `--label GLOB`.
+
+Also importable:
+
+```python
+from ceteris import compare
+from ceteris.runner import run_command
+
+a = run_command(["mpirun", "-n", "2", "./bench"], label="a")
+b = run_command(["mpirun", "-n", "2", "./bench"], label="b")
+assert compare([a, b]).exit_code == 0
+```
+
+Python 3.11 or newer. **No runtime dependencies.**
 
 ## What a record looks like
 
-Real output, 92 fields / 486 lines, committed at
+Real output, 98 fields / 524 lines, committed at
 [`examples/run-tuned-O3.json`](examples/run-tuned-O3.json). This is a verbatim
-excerpt of 23 fields -- every one that captured a value, plus a few that
+excerpt of 30 fields -- every one that captured a value, plus a few that
 degraded.
 
 ```json
@@ -248,6 +294,37 @@ degraded.
       "p": "wrapped command line",
       "s": "value",
       "v": "mpirun -n 2 ./pingpong_O3 1048576 200"
+    },
+    "execution.launcher": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": "mpirun"
+    },
+    "execution.launcher_args": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": [
+        "-n",
+        "2"
+      ]
+    },
+    "execution.program": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": "./pingpong_O3"
+    },
+    "execution.program_args": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": [
+        "1048576",
+        "200"
+      ]
+    },
+    "execution.program_sha256": {
+      "p": "sha256 of ./pingpong_O3",
+      "s": "value",
+      "v": "56d7060c5d6ea948be9d66f482b7614b0240ffde7b4a392a4c78b5eb9ccf62b7"
     },
     "execution.workdir": {
       "p": "os.getcwd()",
@@ -279,15 +356,22 @@ degraded.
       "p": "nvidia-smi",
       "s": "not_applicable"
     },
-    "hardware.hostname": {
+    "hardware.hostnames": {
       "p": "platform.uname().node",
       "s": "value",
-      "v": "MacBook-Air-7.local"
+      "v": [
+        "MacBook-Air-7.local"
+      ]
     },
     "hardware.kernel": {
       "p": "platform.uname().release",
       "s": "value",
       "v": "24.6.0"
+    },
+    "hardware.node_count": {
+      "p": "single-host capture",
+      "s": "value",
+      "v": 1
     },
     "hardware.os": {
       "p": "platform.uname().system",
@@ -329,6 +413,11 @@ degraded.
       "s": "value",
       "v": "main"
     },
+    "source.commit": {
+      "p": "git rev-parse HEAD",
+      "s": "value",
+      "v": "5e88fdb5280e4de0bd37acf8ede7332bc3768a5f"
+    },
     "source.dirty": {
       "p": "git status --porcelain",
       "s": "value",
@@ -341,8 +430,8 @@ degraded.
     }
   },
   "meta": {
-    "captured_at": "2026-08-26T17:47:27+00:00",
-    "content_hash": "426fc4172802df4771923e8a8ed4063da09fa764b04ad03d5d829dde4bb3e72b",
+    "captured_at": "2026-08-27T11:10:49+00:00",
+    "content_hash": "e0cdedd8e85876e9e961a2aa9628632badf8b263e0dea06f347249ad95b699ef",
     "kind": "run",
     "label": "tuned-O3",
     "schema_version": 1,
@@ -353,16 +442,16 @@ degraded.
     "bandwidth_gbs": {
       "p": "regex /bandwidth ([0-9.]+) GB/s/",
       "s": "value",
-      "v": 41.801
+      "v": 30.85
     }
   },
   "run": {
     "drift": [],
-    "duration_s": 0.232,
+    "duration_s": 0.519,
     "exit_code": 0,
-    "output": "size 1048576 bytes  iters 200  bandwidth 41.801 GB/s",
+    "output": "size 1048576 bytes  iters 200  bandwidth 30.850 GB/s",
     "output_truncated": false,
-    "started_at": "2026-08-26T17:47:27+00:00"
+    "started_at": "2026-08-27T11:10:49+00:00"
   }
 }
 ```
@@ -425,7 +514,7 @@ UNKNOWN (could not be captured -- comparison is not certified):
       run-b-gpu-probe-failed: unknown: timed out after 10.0s
       run-a: known, <not applicable>
 
-Matched on 89 other fields.
+Matched on 90 other fields.
 $ echo $?
 2
 ```
@@ -437,12 +526,13 @@ switched off within a week. Fields carry a severity, and only `critical` and
 `material` gate by default:
 
 - **critical** -- `source.commit`, `source.dirty`, everything under `build.`,
-  `execution.command`, every `runtime.env.*` tuning variable
-- **material** -- CPU and GPU model, rank and thread counts, MPI version,
-  allocation shape
-- **informational** -- `scheduler.job_id`, `hardware.hostname`,
+  the launcher and program parts of `execution.`, the binary hash, every
+  `runtime.env.*` tuning variable
+- **material** -- CPU and GPU model, node count, rank and thread counts, MPI
+  version, allocation shape
+- **informational** -- `scheduler.job_id`, `hardware.hostnames`,
   `source.branch` (the branch name does not change the binary; the commit
-  does), `execution.workdir`
+  does), the verbatim `execution.command`
 
 `--strict` promotes informational fields into the gate. Any field not listed
 defaults to **material**, so a field added in a later version gates by default
@@ -454,6 +544,7 @@ rather than quietly escaping the check.
 --vary runtime.env.LCI_ATTR_PACKET_SIZE   # exact
 --vary 'runtime.env.LCI_*'                # glob -- a 40-config sweep cannot enumerate by hand
 --vary build                              # bare prefix, covers every build.* field
+--vary execution.program_args             # the sweep is in the arguments; rank count still gates
 --waive hardware.cpu_model:"same partition, different node draw"
 ```
 
@@ -468,16 +559,10 @@ flagged, because that usually means the sweep script never applied the setting.
 
 ## Metrics
 
-`--metric NAME=REGEX`, or a `[metrics]` table in a config file. One capture
+`--metric NAME=REGEX`, or a `[metrics]` table in `ceteris.toml`. One capture
 group per pattern. A pattern that does not match records `unknown` -- never a
 zero, never the last number that happened to appear, and never a silent
 omission.
-
-```toml
-[metrics]
-bandwidth_gbs = "bandwidth ([0-9.]+) GB/s"
-latency_us = "avg latency ([0-9.]+) us"
-```
 
 ## Exit codes
 
@@ -496,14 +581,14 @@ surrounding script behaves.
 
 Which variables and build keys matter differs per project, so they are data,
 not code. [`src/ceteris/defaults.toml`](src/ceteris/defaults.toml) ships a set
-for HPX / MPI / LCI / CUDA. A user file extends it:
+for HPX / MPI / LCI / CUDA. `./ceteris.toml` (or `--config PATH`) extends it:
 
 ```toml
 [capture]
 env_allowlist = ["MY_PROJECT_TUNABLE"]
 
 [severity]
-"hardware.hostname" = "critical"   # heterogeneous partition: the node matters
+"hardware.hostnames" = "critical"   # heterogeneous partition: the nodes matter
 
 [metrics]
 bandwidth_gbs = "bandwidth ([0-9.]+) GB/s"
@@ -522,12 +607,10 @@ gaps are left open and documented instead.
   `ompi_info` report what is *available*, not what was selected; UCX picks
   transports during init, inside the job. Captured instead: the transport
   *configuration* visible in the environment, which is a real observation.
-- **Per-rank observed CPU affinity.** Seeing where each rank of a 16-node job
-  actually landed needs code running inside every rank and a reduction step --
-  a different architecture, not another field. Captured instead: the launcher
-  command line, binding *intent* (`OMP_PROC_BIND`, `OMP_PLACES`,
-  `SLURM_CPU_BIND`, `I_MPI_PIN*`, `KMP_AFFINITY`, …), and the capturing
-  process's own affinity mask where the OS exposes one.
+- **Per-rank observed CPU affinity.** Seeing where each rank actually landed
+  needs code inside every rank. Captured instead: the launcher arguments
+  (`--bind-to core` lives there), binding *intent* in the environment, and
+  each node's capture-process affinity mask where the OS exposes one.
 - **NUMA topology beyond a node count.** Low silent variance, high parsing
   cost, largely implied by CPU model and partition.
 
@@ -535,13 +618,17 @@ Emitting these as a permanent `unknown` would make every comparison
 uncertifiable; emitting them as `not_applicable` would be worse, because two
 runs that both failed to observe binding would compare as agreeing.
 
+## Status
+
+Alpha. The single-host path is exercised for real on macOS and Linux in CI.
+The Slurm fan-out and the CUDA collector are tested against recorded command
+output and hand-built per-node records; they have not yet run on a real
+allocation. If you run one, `ceteris capture -o fp.json` inside the job and
+the resulting file is the most useful thing you can send.
+
 ## Tests
 
 ```sh
 python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/python -m pytest
 ```
-
-The Linux, Slurm and CUDA collectors cannot execute on macOS, so they are
-driven from recorded command output. That tests the parsers against a recorded
-reality, which is the honest limit of what is checkable on a laptop.

@@ -1,0 +1,64 @@
+{
+  "context": {
+    "date": "2026-08-28T03:15:02+05:30",
+    "host_name": "MacBook-Air-7.local",
+    "executable": "./gb",
+    "num_cpus": 10,
+    "mhz_per_cpu": 24,
+    "cpu_scaling_enabled": false,
+    "caches": [
+      {
+        "type": "Data",
+        "level": 1,
+        "size": 65536,
+        "num_sharing": 0
+      },
+      {
+        "type": "Instruction",
+        "level": 1,
+        "size": 131072,
+        "num_sharing": 0
+      },
+      {
+        "type": "Unified",
+        "level": 2,
+        "size": 4194304,
+        "num_sharing": 1
+      }
+    ],
+    "load_avg": [2.40625,2.57861,1.99561],
+    "library_version": "v1.9.5",
+    "library_build_type": "release",
+    "json_schema_version": 1
+  },
+  "benchmarks": [
+    {
+      "name": "BM_sort/1024",
+      "family_index": 0,
+      "per_family_instance_index": 0,
+      "run_name": "BM_sort/1024",
+      "run_type": "iteration",
+      "repetitions": 1,
+      "repetition_index": 0,
+      "threads": 1,
+      "iterations": 12956,
+      "real_time": 5.1317986247698191e+03,
+      "cpu_time": 5.1318308119790136e+03,
+      "time_unit": "ns"
+    },
+    {
+      "name": "BM_sort/8192",
+      "family_index": 0,
+      "per_family_instance_index": 1,
+      "run_name": "BM_sort/8192",
+      "run_type": "iteration",
+      "repetitions": 1,
+      "repetition_index": 0,
+      "threads": 1,
+      "iterations": 958,
+      "real_time": 6.0541144064734523e+04,
+      "cpu_time": 6.0525052192066927e+04,
+      "time_unit": "ns"
+    }
+  ]
+}

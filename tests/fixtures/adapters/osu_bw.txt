@@ -1,0 +1,6 @@
+# OSU MPI Bandwidth Test v7.3
+# Size      Bandwidth (MB/s)
+1                       3.21
+1024                 2412.55
+1048576             12210.03
+4194304             12388.90

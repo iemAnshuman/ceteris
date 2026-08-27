@@ -28,7 +28,7 @@ import sys
 import time
 from typing import Any
 
-from . import execution
+from . import adapters, execution
 from .capture import capture
 from .config import GATING_SEVERITIES, Config
 from .metrics import extract
@@ -79,6 +79,8 @@ def run_command(
     echo: bool = True,
     series: str | None = None,
     repeat: int | None = None,
+    adapter: str | None = None,
+    ingest: list[str] | None = None,
 ) -> Fingerprint:
     """Capture, run the command, capture again, and assemble one record."""
     cfg = cfg or Config.load()
@@ -92,12 +94,24 @@ def run_command(
     )
     before = capture(label=label, **kwargs)
 
+    # Harness adapter: recognised on the command line, may add an export flag.
+    if adapter == "none":
+        chosen = None
+    elif adapter:
+        chosen = adapters.BY_NAME.get(adapter)
+        if chosen is None:
+            raise ValueError(f"unknown adapter {adapter!r}; known: {', '.join(sorted(adapters.BY_NAME))}")
+    else:
+        chosen = adapters.detect(command)
+    plan = chosen.plan(command, os.getcwd()) if chosen else adapters.Plan("none", list(command))
+
     started = _dt.datetime.now(_dt.timezone.utc)
+    wall_started = time.time()
     clock = time.monotonic()
     chunks: list[str] = []
     try:
         proc = subprocess.Popen(
-            command,
+            plan.argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -131,12 +145,25 @@ def run_command(
         "drift": _drift(before.fields, after.fields, cfg),
     }
 
+    metrics: dict[str, Field] = {}
+    if chosen:
+        try:
+            metrics.update(chosen.collect(plan, output, os.getcwd(), wall_started))
+        finally:
+            if plan.added_output and plan.output and os.path.exists(plan.output):
+                os.unlink(plan.output)
+    for item in ingest or []:
+        path, _, fmt = item.partition(":")
+        metrics.update(adapters.ingest(path, fmt or None))
     patterns = dict(getattr(cfg, "metrics", {}) or {})
     patterns.update(metric_patterns or {})
-    metrics = extract(output, patterns) if patterns else {}
+    if patterns:
+        metrics.update(extract(output, patterns))
 
     meta = dict(before.meta)
     meta["kind"] = "run"
+    if chosen:
+        meta["adapter"] = chosen.name
     if series:
         meta["series"] = series
     if repeat is not None:

@@ -1,0 +1,10 @@
+================================================
+MLPerf Results Summary
+================================================
+SUT name : PySUT
+Scenario : Offline
+Mode     : PerformanceOnly
+Samples per second: 1234.56
+Result is : VALID
+  Min duration satisfied : Yes
+  Min queries satisfied : Yes

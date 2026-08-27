@@ -1,0 +1,4 @@
+[
+  {"benchmark": "org.example.MyBench.parse", "mode": "avgt", "primaryMetric": {"score": 12.345, "scoreUnit": "us/op", "scoreError": 0.4}},
+  {"benchmark": "org.example.MyBench.encode", "mode": "thrpt", "primaryMetric": {"score": 98765.4, "scoreUnit": "ops/s", "scoreError": 1200.0}}
+]

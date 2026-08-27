@@ -6,6 +6,19 @@ on:
   pull_request:
 
 jobs:
+  self-check:
+    # The action gating its own repository on a tiny C benchmark.
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: sudo apt-get install -y -q hyperfine >/dev/null
+      - uses: ./
+        with:
+          command: hyperfine -N --runs 10 --warmup 2 'python3 -c pass'
+          repeats: "3"
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -26,6 +39,12 @@ jobs:
           ceteris capture --repo . -o fp.json
           python -c "import json,sys; f=json.load(open('fp.json'))['fields']; bad=[k for k,v in f.items() if v['s']=='error']; print(len(f),'fields'); sys.exit(bad and print(bad))"
       # The exit-code contract is the CI integration; check it on the real binary.
+      - name: hyperfine zero-config (ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y -q hyperfine >/dev/null
+          ceteris run --label hf --repeats 3 -- hyperfine -N --runs 5 --warmup 2 'python3 -c pass'
+          ceteris compare --last 3 --certify
       - run: |
           ceteris compare examples/run-tuned-O3.json examples/run-tuned-O0.json; test $? -eq 1
           ceteris compare examples/run-tuned-O3.json examples/run-tuned-O0.json --vary build.cxx_flags --vary execution; test $? -eq 0

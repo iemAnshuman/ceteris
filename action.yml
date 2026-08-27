@@ -1,0 +1,70 @@
+name: ceteris
+description: Run a benchmark on the base and head of a pull request and refuse the comparison unless it is valid.
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  command:
+    description: The benchmark command (a hyperfine, Google Benchmark, pytest-benchmark, JMH, cargo bench or plain command).
+    required: true
+  repeats:
+    description: Runs per side. Three or more enables the noise floor.
+    default: "3"
+  vary:
+    description: Fields expected to differ between base and head, comma-separated. Source identity is always declared.
+    default: ""
+  require-signal:
+    description: Fail unless some metric shows a gap above the noise floor.
+    default: "false"
+  metric:
+    description: Extra NAME=REGEX metric patterns, newline-separated.
+    default: ""
+  python-version:
+    description: Python used to run ceteris.
+    default: "3.12"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install ceteris
+      shell: bash
+      run: python -m pip install -q "${{ github.action_path }}"
+    - name: Benchmark base
+      shell: bash
+      env:
+        CETERIS_STORE: ${{ runner.temp }}/ceteris-runs
+      run: |
+        set -e
+        git fetch -q origin "${{ github.event.pull_request.base.sha || github.event.before }}" || true
+        git checkout -q "${{ github.event.pull_request.base.sha || github.event.before }}"
+        args=()
+        while IFS= read -r m; do [ -n "$m" ] && args+=(--metric "$m"); done <<< "${{ inputs.metric }}"
+        ceteris run --label base --repeats "${{ inputs.repeats }}" "${args[@]}" -- ${{ inputs.command }}
+    - name: Benchmark head
+      shell: bash
+      env:
+        CETERIS_STORE: ${{ runner.temp }}/ceteris-runs
+      run: |
+        set -e
+        git checkout -q "${{ github.event.pull_request.head.sha || github.sha }}"
+        args=()
+        while IFS= read -r m; do [ -n "$m" ] && args+=(--metric "$m"); done <<< "${{ inputs.metric }}"
+        ceteris run --label head --repeats "${{ inputs.repeats }}" "${args[@]}" -- ${{ inputs.command }}
+    - name: Compare
+      shell: bash
+      env:
+        CETERIS_STORE: ${{ runner.temp }}/ceteris-runs
+      run: |
+        set +e
+        vary=(--vary source --vary execution.program_sha256 --vary deps)
+        IFS=',' read -ra extra <<< "${{ inputs.vary }}"
+        for v in "${extra[@]}"; do [ -n "$v" ] && vary+=(--vary "$v"); done
+        signal=""; [ "${{ inputs.require-signal }}" = "true" ] && signal="--require-signal"
+        ceteris compare --certify $signal "${vary[@]}" | tee report.txt
+        code=${PIPESTATUS[0]}
+        { echo '## ceteris'; echo '```'; cat report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        exit $code

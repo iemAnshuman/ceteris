@@ -7,8 +7,9 @@ import json
 import sys
 from pathlib import Path
 
+from . import certificate
 from . import store as store_mod
-from .compare import EXIT_OK, EXIT_USAGE, compare as compare_fingerprints
+from .compare import EXIT_OK, EXIT_UNDECLARED, EXIT_USAGE, compare as compare_fingerprints
 from .config import Config
 from .metrics import parse_cli_metrics
 from .model import Fingerprint
@@ -118,6 +119,13 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="exit 4 unless some metric's gap exceeds the noise floor (needs >= 3 repeats per configuration)")
     cmp_.add_argument("--config", help="TOML or JSON config extending the defaults")
     cmp_.add_argument("--json", action="store_true", help="machine-readable report")
+    cmp_.add_argument("--certify", action="store_true",
+                      help="append a one-line certificate that `ceteris verify` can check")
+
+    ver = sub.add_parser("verify", help="check a certificate line against its records")
+    ver.add_argument("certificate", help="the ceteris-certified line, quoted")
+    ver.add_argument("fingerprints", nargs="+", help="the record files the certificate covers")
+    ver.add_argument("--config", help="TOML or JSON config extending the defaults")
     return parser
 
 
@@ -192,10 +200,27 @@ def _cmd_compare(args) -> int:
         require_signal=args.require_signal,
     )
     if args.json:
-        sys.stdout.write(json.dumps(to_json(report), indent=2, sort_keys=True) + "\n")
+        body = to_json(report)
+        if args.certify:
+            body["certificate"] = certificate.issue(report)
+        sys.stdout.write(json.dumps(body, indent=2, sort_keys=True) + "\n")
     else:
         sys.stdout.write(render(report))
+        if args.certify:
+            sys.stdout.write("\n" + certificate.issue(report) + "\n")
     return report.exit_code
+
+
+def _cmd_verify(args) -> int:
+    parsed = certificate.parse(args.certificate)
+    cfg = Config.load(args.config)
+    fingerprints = [_load_fingerprint(p) for p in args.fingerprints]
+    report = compare_fingerprints(
+        fingerprints, vary=parsed.vary, waive=parsed.waive, cfg=cfg, strict=parsed.strict,
+    )
+    ok, why = certificate.verify(args.certificate, report)
+    sys.stdout.write(f"ceteris: {why}\n")
+    return EXIT_OK if ok else EXIT_UNDECLARED
 
 
 def _cmd_run(args) -> int:
@@ -290,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:
         "run": _cmd_run,
         "list": _cmd_list,
         "compare": _cmd_compare,
+        "verify": _cmd_verify,
     }[args.subcommand]
     try:
         return handler(args)

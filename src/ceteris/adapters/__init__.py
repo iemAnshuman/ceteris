@@ -111,11 +111,16 @@ class Hyperfine(Adapter):
             return self._failed(err)
         out: dict[str, Field] = {}
         prov = f"hyperfine --export-json ({'injected' if plan.added_output else 'given'})"
-        for r in data.get("results", []):
-            key = _slug(r.get("command", "cmd"))
-            for stat in ("median", "mean", "min"):
+        results = data.get("results", [])
+        # Metric names must be stable across configurations, or the noise
+        # floor cannot compare them. The command is the thing that varies
+        # between configurations, so it must not be in the name; a single
+        # command is 'hyperfine.median_s', several are numbered in order.
+        for i, r in enumerate(results, 1):
+            key = "hyperfine" if len(results) == 1 else f"hyperfine.{i}"
+            for stat in ("median", "min"):
                 if stat in r:
-                    out[f"hyperfine.{key}.{stat}_s"] = value(_num(r[stat]), provenance=prov)
+                    out[f"{key}.{stat}_s"] = value(_num(r[stat]), provenance=f"{prov}; command: {r.get('command', '?')}")
         return out or self._failed("no results in export")
 
 

@@ -70,6 +70,7 @@ class Group:
     display: str
     labels: list[str] = field(default_factory=list)
     raw_variants: list[str] = field(default_factory=list)
+    indices: list[int] = field(default_factory=list)   # positions in the compared sequence
 
 
 @dataclass
@@ -187,7 +188,7 @@ def _analyse_field(
     grouped: dict[Hashable, Group] = {}
     indeterminate: list[tuple[str, str]] = []
 
-    for fp in fingerprints:
+    for idx, fp in enumerate(fingerprints):
         label = fp.label
         f = fp.fields.get(path)
         if f is None:
@@ -212,6 +213,7 @@ def _analyse_field(
             group = Group(key=key, display=display)
             grouped[key] = group
         group.labels.append(label)
+        group.indices.append(idx)
         if raw not in group.raw_variants:
             group.raw_variants.append(raw)
 
@@ -328,10 +330,10 @@ def _confounds(results: list[FieldResult]) -> list[Confound]:
     violations = [r for r in results if r.classification is Classification.VIOLATION]
     found: list[Confound] = []
     for d in declared:
-        d_of = {label: g.display for g in d.groups for label in g.labels}
+        d_of = {i: g.display for g in d.groups for i in g.indices}
         for u in violations:
-            u_of = {label: g.display for g in u.groups for label in g.labels}
-            labels = [l for l in d_of if l in u_of]
+            u_of = {i: g.display for g in u.groups for i in g.indices}
+            labels = [i for i in d_of if i in u_of]
             if not labels:
                 continue
             # u is a function of d: every d-group maps to exactly one u-value.

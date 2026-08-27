@@ -37,6 +37,13 @@ def test_an_unrelated_difference_is_a_plain_violation_not_a_confound(cfg):
     assert report.violations and not report.confounds
 
 
+def test_repeats_sharing_a_label_are_counted_individually(cfg):
+    runs = [fp("lci", runtime__transport_configured="lci", source__commit="aaa") for _ in range(3)]
+    runs += [fp("mpi", runtime__transport_configured="mpi", source__commit="bbb") for _ in range(3)]
+    c = compare(runs, vary=["runtime.transport_configured"], cfg=cfg).confounds[0]
+    assert c.table == [("lci", "aaa", 3), ("mpi", "bbb", 3)]
+
+
 def test_no_confound_when_nothing_undeclared_differs(cfg):
     runs = [fp("a", runtime__transport_configured="lci"), fp("b", runtime__transport_configured="mpi")]
     assert not compare(runs, vary=["runtime.transport_configured"], cfg=cfg).confounds

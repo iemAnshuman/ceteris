@@ -30,8 +30,9 @@ def collect(adapter, output=None, stdout="", cwd=None):
 
 def test_hyperfine_real_fixture():
     out = collect(adapters.Hyperfine(), FX / "hyperfine.json")
-    keys = sorted(out)
-    assert any(k.startswith("hyperfine.sleep_0.01.median_s") for k in keys), keys
+    # two commands in this export -> numbered; names never contain the command
+    assert set(out) == {"hyperfine.1.median_s", "hyperfine.1.min_s", "hyperfine.2.median_s", "hyperfine.2.min_s"}
+    assert "sleep 0.01" in out["hyperfine.1.median_s"].provenance
     assert all(f.state is State.VALUE for f in out.values())
 
 
@@ -100,7 +101,7 @@ def test_hyperfine_plan_injects_export_when_absent(tmp_path):
 
 
 def test_ingest_autodetects_format():
-    assert "hyperfine.sleep_0.01.median_s" in adapters.ingest(str(FX / "hyperfine.json"))
+    assert "hyperfine.1.median_s" in adapters.ingest(str(FX / "hyperfine.json"))
     assert "gbench.BM_sort/1024.real_time_ns" in adapters.ingest(str(FX / "google_benchmark.json"))
     assert "pytest.test_join.median_s" in adapters.ingest(str(FX / "pytest_benchmark.json"))
     assert "jmh.MyBench.parse.avgt_us_op" in adapters.ingest(str(FX / "jmh.json"))
@@ -113,6 +114,6 @@ def test_end_to_end_hyperfine_zero_config(cfg, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     rec = run_command(["hyperfine", "-N", "--runs", "3", "--warmup", "1", "true"], cfg=cfg, echo=False, label="hf")
     assert rec.meta["adapter"] == "hyperfine"
-    assert any(k.startswith("hyperfine.true.median_s") for k in rec.metrics), rec.metrics
+    assert "hyperfine.median_s" in rec.metrics, rec.metrics  # single command: stable name
     assert rec.fields["execution.command"].value == "hyperfine -N --runs 3 --warmup 1 true"  # original, not augmented
     assert not list(tmp_path.glob("ceteris-hyperfine-*"))  # injected export cleaned up

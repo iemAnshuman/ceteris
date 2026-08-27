@@ -36,10 +36,25 @@ def _groups_line(result: FieldResult) -> str:
     return "  vs  ".join(parts)
 
 
+def _summary_line(result: FieldResult) -> str | None:
+    """Many distinct values (load average across 40 runs): summarise."""
+    if len(result.groups) <= 3:
+        return None
+    runs = sum(len(g.labels) for g in result.groups)
+    nums = []
+    for g in result.groups:
+        try:
+            nums.append(float(g.display))
+        except ValueError:
+            return f"{len(result.groups)} distinct values across {runs} runs"
+    return f"{len(result.groups)} distinct values across {runs} runs (range {min(nums):g} to {max(nums):g})"
+
+
 def _field_lines(results: list[FieldResult], width: int) -> list[str]:
     lines = []
     for result in results:
-        lines.append(f"  {result.path.ljust(width)}  {_groups_line(result)}")
+        shown = _summary_line(result) if result.classification is Classification.INFORMATIONAL else None
+        lines.append(f"  {result.path.ljust(width)}  {shown or _groups_line(result)}")
         if result.reason:
             lines.append(f"  {' ' * width}  reason: {result.reason}")
         if result.note:

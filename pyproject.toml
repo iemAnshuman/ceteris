@@ -14,11 +14,28 @@ requires-python = ">=3.11"
 # the 3.11 floor; JSON config files are also accepted so a cluster with
 # an older interpreter is not locked out of configuring the tool.
 dependencies = []
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Anshuman Agrawal" }]
+keywords = ["benchmark", "hpc", "reproducibility", "mpi", "slurm", "provenance"]
 classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Science/Research",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: System :: Benchmark",
+  "Topic :: Software Development :: Testing",
 ]
+
+[project.urls]
+Homepage = "https://github.com/iemAnshuman/ceteris"
+Issues = "https://github.com/iemAnshuman/ceteris/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]

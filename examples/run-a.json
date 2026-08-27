@@ -1,16 +1,11 @@
 {
   "fields": {
+    "build.cmake.BUILD_SHARED_LIBS": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
     "build.cmake.CMAKE_BUILD_TYPE": {
-      "d": "no CMake cache captured",
-      "p": "--cmake-cache",
-      "s": "not_applicable"
-    },
-    "build.cmake.CMAKE_CUDA_ARCHITECTURES": {
-      "d": "no CMake cache captured",
-      "p": "--cmake-cache",
-      "s": "not_applicable"
-    },
-    "build.cmake.CMAKE_CUDA_FLAGS": {
       "d": "no CMake cache captured",
       "p": "--cmake-cache",
       "s": "not_applicable"
@@ -36,6 +31,21 @@
       "s": "not_applicable"
     },
     "build.cmake.CMAKE_CXX_STANDARD": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_C_COMPILER": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_C_FLAGS": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_INTERPROCEDURAL_OPTIMIZATION": {
       "d": "no CMake cache captured",
       "p": "--cmake-cache",
       "s": "not_applicable"
@@ -88,6 +98,11 @@
     "build.type": {
       "d": "no --build-type or CMake cache",
       "p": "--build-type",
+      "s": "not_applicable"
+    },
+    "deps.container_image": {
+      "d": "no container image variable set",
+      "p": "$CONTAINER_IMAGE",
       "s": "not_applicable"
     },
     "hardware.arch": {
@@ -162,6 +177,13 @@
       "s": "value",
       "v": "15.7.7"
     },
+    "packs.active": {
+      "p": "pack activation",
+      "s": "value",
+      "v": [
+        "hpc"
+      ]
+    },
     "parallelism.binding_intent": {
       "d": "no binding variables set",
       "p": "environment",
@@ -178,16 +200,6 @@
     },
     "parallelism.threads": {
       "d": "no thread-count variable set (OMP_NUM_THREADS, HPX_NUM_THREADS)",
-      "s": "not_applicable"
-    },
-    "runtime.env.CUDA_LAUNCH_BLOCKING": {
-      "d": "unset",
-      "p": "$CUDA_LAUNCH_BLOCKING",
-      "s": "not_applicable"
-    },
-    "runtime.env.CUDA_VISIBLE_DEVICES": {
-      "d": "unset",
-      "p": "$CUDA_VISIBLE_DEVICES",
       "s": "not_applicable"
     },
     "runtime.env.GOMP_CPU_AFFINITY": {
@@ -285,6 +297,21 @@
       "p": "$LCI_USE_DREG",
       "s": "not_applicable"
     },
+    "runtime.env.LD_LIBRARY_PATH": {
+      "d": "unset",
+      "p": "$LD_LIBRARY_PATH",
+      "s": "not_applicable"
+    },
+    "runtime.env.LD_PRELOAD": {
+      "d": "unset",
+      "p": "$LD_PRELOAD",
+      "s": "not_applicable"
+    },
+    "runtime.env.MALLOC_CONF": {
+      "d": "unset",
+      "p": "$MALLOC_CONF",
+      "s": "not_applicable"
+    },
     "runtime.env.MPICH_ASYNC_PROGRESS": {
       "d": "unset",
       "p": "$MPICH_ASYNC_PROGRESS",
@@ -293,11 +320,6 @@
     "runtime.env.MPICH_NEMESIS_NETMOD": {
       "d": "unset",
       "p": "$MPICH_NEMESIS_NETMOD",
-      "s": "not_applicable"
-    },
-    "runtime.env.NVIDIA_VISIBLE_DEVICES": {
-      "d": "unset",
-      "p": "$NVIDIA_VISIBLE_DEVICES",
       "s": "not_applicable"
     },
     "runtime.env.OMPI_MCA_btl": {
@@ -338,6 +360,11 @@
     "runtime.env.OMP_SCHEDULE": {
       "d": "unset",
       "p": "$OMP_SCHEDULE",
+      "s": "not_applicable"
+    },
+    "runtime.env.TCMALLOC_RELEASE_RATE": {
+      "d": "unset",
+      "p": "$TCMALLOC_RELEASE_RATE",
       "s": "not_applicable"
     },
     "runtime.env.UCX_IB_GID_INDEX": {
@@ -454,13 +481,73 @@
       "d": "repository has no submodules",
       "p": "git submodule status --recursive",
       "s": "not_applicable"
+    },
+    "system.aslr": {
+      "p": "darwin policy",
+      "s": "value",
+      "v": "always-on"
+    },
+    "system.container": {
+      "p": "darwin",
+      "s": "value",
+      "v": "no"
+    },
+    "system.cpu_governor": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.load_1m": {
+      "p": "os.getloadavg()[0]",
+      "s": "value",
+      "v": 2.96
+    },
+    "system.mem_available_mb": {
+      "d": "not tracked on darwin in this version",
+      "p": "sysctl",
+      "s": "not_applicable"
+    },
+    "system.power_source": {
+      "p": "pmset -g batt",
+      "s": "value",
+      "v": "battery"
+    },
+    "system.smt": {
+      "p": "sysctl hw.logicalcpu vs hw.physicalcpu",
+      "s": "value",
+      "v": "off"
+    },
+    "system.swap": {
+      "p": "sysctl -n vm.swapusage",
+      "s": "value",
+      "v": "in-use"
+    },
+    "system.thermal_throttle": {
+      "p": "pmset -g therm",
+      "s": "value",
+      "v": "none"
+    },
+    "system.transparent_hugepages": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.turbo": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.virtualization": {
+      "p": "sysctl -n kern.hv_vmm_present",
+      "s": "value",
+      "v": "none"
     }
   },
   "meta": {
-    "captured_at": "2026-08-27T11:10:53+00:00",
-    "content_hash": "d315410bcf3bcf27cab95a2dd447c14ef7cd31df41656e72fdaf3f4cec9859df",
+    "captured_at": "2026-08-27T21:52:37+00:00",
+    "content_hash": "56295e34be963bb31bd539c25d29ca36e30729d0fadbe9efa73665557a683db0",
     "label": "run-a",
-    "schema_version": 1,
+    "schema_version": 2,
     "tool": "ceteris",
     "tool_version": "0.1.0"
   }

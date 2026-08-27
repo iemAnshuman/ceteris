@@ -76,17 +76,17 @@
       "s": "not_applicable"
     },
     "build.compiler_id": {
-      "p": "/usr/bin/c++ --version",
+      "p": "c++ --version",
       "s": "value",
       "v": "apple-clang"
     },
     "build.compiler_path": {
-      "p": "--compiler",
+      "p": "default c++ on PATH",
       "s": "value",
       "v": "/usr/bin/c++"
     },
     "build.compiler_version": {
-      "p": "/usr/bin/c++ --version",
+      "p": "c++ --version",
       "s": "value",
       "v": "17.0.0"
     },
@@ -104,6 +104,48 @@
       "d": "no container image variable set",
       "p": "$CONTAINER_IMAGE",
       "s": "not_applicable"
+    },
+    "execution.command": {
+      "p": "wrapped command line",
+      "s": "value",
+      "v": "hyperfine -N --warmup 1 --runs 5 gzip -6 -c /tmp/payload.txt"
+    },
+    "execution.launcher": {
+      "d": "no recognised launcher; program run directly",
+      "p": "heuristic split of the wrapped command line",
+      "s": "not_applicable"
+    },
+    "execution.launcher_args": {
+      "d": "no recognised launcher",
+      "p": "heuristic split of the wrapped command line",
+      "s": "not_applicable"
+    },
+    "execution.program": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": "hyperfine"
+    },
+    "execution.program_args": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": [
+        "-N",
+        "--warmup",
+        "1",
+        "--runs",
+        "5",
+        "gzip -6 -c /tmp/payload.txt"
+      ]
+    },
+    "execution.program_sha256": {
+      "p": "sha256 of /opt/homebrew/bin/hyperfine",
+      "s": "value",
+      "v": "0ba6ba0e83ab1684ef3c181ca71e611031b9e97eee274a85c608f7ba3f1453af"
+    },
+    "execution.workdir": {
+      "p": "os.getcwd()",
+      "s": "value",
+      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/examples/hyperfine"
     },
     "hardware.arch": {
       "p": "platform.uname().machine",
@@ -136,9 +178,9 @@
       "s": "not_applicable"
     },
     "hardware.gpu_driver": {
-      "d": "timed out after 10.0s",
-      "p": "nvidia-smi --query-gpu=name,driver_version --format=csv,noheader",
-      "s": "unknown"
+      "d": "nvidia-smi not on PATH",
+      "p": "nvidia-smi",
+      "s": "not_applicable"
     },
     "hardware.gpu_models": {
       "d": "nvidia-smi not on PATH",
@@ -460,12 +502,12 @@
     "source.branch": {
       "p": "git branch --show-current",
       "s": "value",
-      "v": "fix/thread-queue-waittime-name"
+      "v": "main"
     },
     "source.commit": {
       "p": "git rev-parse HEAD",
       "s": "value",
-      "v": "81c60cb7319de99b8b75b539b879351af214006e"
+      "v": "30f325bb004e662bf952e41a90c75e55e2a208d7"
     },
     "source.dirty": {
       "p": "git status --porcelain",
@@ -475,7 +517,7 @@
     "source.repo_path": {
       "p": "--repo",
       "s": "value",
-      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/hpx"
+      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/examples/hyperfine"
     },
     "source.submodules": {
       "d": "repository has no submodules",
@@ -500,7 +542,7 @@
     "system.load_1m": {
       "p": "os.getloadavg()[0]",
       "s": "value",
-      "v": 2.96
+      "v": 2.62
     },
     "system.mem_available_mb": {
       "d": "not tracked on darwin in this version",
@@ -544,11 +586,35 @@
     }
   },
   "meta": {
-    "captured_at": "2026-08-27T21:52:37+00:00",
-    "content_hash": "56295e34be963bb31bd539c25d29ca36e30729d0fadbe9efa73665557a683db0",
-    "label": "run-b-gpu-probe-failed",
+    "adapter": "hyperfine",
+    "captured_at": "2026-08-27T21:53:47+00:00",
+    "content_hash": "c10563aaca79370964f6256b807738c0263d978d646e341be31e1a30552ebf39",
+    "kind": "run",
+    "label": "gzip-6",
+    "repeat": 1,
     "schema_version": 2,
+    "series": "gzip-6@2026-08-27T21:53:47+00:00",
     "tool": "ceteris",
     "tool_version": "0.1.0"
+  },
+  "metrics": {
+    "hyperfine.median_s": {
+      "p": "hyperfine --export-json (injected); command: gzip -6 -c /tmp/payload.txt",
+      "s": "value",
+      "v": 0.640134791
+    },
+    "hyperfine.min_s": {
+      "p": "hyperfine --export-json (injected); command: gzip -6 -c /tmp/payload.txt",
+      "s": "value",
+      "v": 0.6390290000000001
+    }
+  },
+  "run": {
+    "drift": [],
+    "duration_s": 3.866,
+    "exit_code": 0,
+    "output": "Benchmark 1: gzip -6 -c /tmp/payload.txt\n  Time (mean \u00b1 \u03c3):     644.4 ms \u00b1   6.4 ms    [User: 639.5 ms, System: 3.8 ms]\n  Range (min \u2026 max):   639.0 ms \u2026 651.8 ms    5 runs\n \n",
+    "output_truncated": false,
+    "started_at": "2026-08-27T21:53:47+00:00"
   }
 }

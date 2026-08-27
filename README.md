@@ -2,270 +2,169 @@
 
 [![ci](https://github.com/iemAnshuman/ceteris/actions/workflows/ci.yml/badge.svg)](https://github.com/iemAnshuman/ceteris/actions/workflows/ci.yml)
 
-Wrap a benchmark run, and refuse to compare two numbers that are not comparable.
+**Wrap any benchmark. Refuse the comparison unless it is valid.**
 
-Named for *ceteris paribus*, all other things being equal. That is the claim
-every benchmark comparison makes, and it is the claim this tool checks.
+A comparison of two benchmark numbers is valid if, and only if:
 
-The failure it exists to catch is always shaped the same way: **you intended to
-vary one thing, something else varied too, and nothing told you.** A stale
-build on one side. `-O2` against `-O3`. `LCI_ATTR_PACKET_SIZE` left at its
-8 KB default on one side and tuned to 73728 on the other, which is a ~35x
-performance cliff that reads exactly like an algorithmic result. One node in a
-sixteen-node allocation running a different driver.
+1. the only things that differ between the runs are the things you *meant* to vary, and
+2. the difference is bigger than the noise.
 
-Experiment trackers record metrics. None of them answer *are these two numbers
-even comparable?*
+Every benchmark harness -- hyperfine, Google Benchmark, JMH, pytest-benchmark,
+criterion, MLPerf, OSU -- does some of (2) and none of (1). Their own docs list
+the confounds and tell *you* to handle them: CPU governor, turbo, SMT, a stale
+build, a different library version, one node in sixteen on another driver.
+ceteris captures them, checks both conditions, and exits non-zero when either
+fails. It sits underneath the harness you already use.
 
-## Quickstart
+Named for *ceteris paribus*: all other things being equal.
 
 ```sh
 pipx install git+https://github.com/iemAnshuman/ceteris.git
 ```
 
-Two real runs of an MPI ping-pong benchmark on the machine this README was
-written on, an Apple M4. The benchmark is [`examples/pingpong.c`](examples/pingpong.c);
-the only intended difference is the optimisation level.
+Python 3.11+. No runtime dependencies.
+
+## Quickstart
+
+Two real runs on the machine this README was written on, an Apple M4 laptop.
+Compress a 27 MB file with `gzip -6` and `gzip -1`, each timed by hyperfine,
+each repeated three times. No `--metric` needed: ceteris recognises hyperfine
+and reads its export.
 
 ```console
-$ mpicc -O3 -o pingpong_O3 examples/pingpong.c
-$ mpicc -O0 -o pingpong_O0 examples/pingpong.c
+$ ceteris run --label gzip-6 --repeats 3 -- hyperfine -N --warmup 1 --runs 5 'gzip -6 -c /tmp/payload.txt'
+$ ceteris run --label gzip-1 --repeats 3 -- hyperfine -N --warmup 1 --runs 5 'gzip -1 -c /tmp/payload.txt'
 
-$ ceteris run --label tuned-O3 --compiler mpicc --cxx-flags -O3 \
-      --metric 'bandwidth_gbs=bandwidth ([0-9.]+) GB/s' \
-      -- mpirun -n 2 ./pingpong_O3 1048576 200
-size 1048576 bytes  iters 200  bandwidth 30.850 GB/s
-ceteris: recorded .ceteris/runs/20260827-111049Z-tuned-O3.json
+$ ceteris compare
+6 runs compared. Declared varying: nothing
 
-$ ceteris run --label tuned-O0 --compiler mpicc --cxx-flags -O0 \
-      --metric 'bandwidth_gbs=bandwidth ([0-9.]+) GB/s' \
-      -- mpirun -n 2 ./pingpong_O0 1048576 200
-size 1048576 bytes  iters 200  bandwidth 51.269 GB/s
-ceteris: recorded .ceteris/runs/20260827-111050Z-tuned-O0.json
-```
+MEASUREMENTS (per configuration):
+  configuration    n  metric                  min     median        max  spread
+  gzip-6    3  hyperfine.median_s     0.6401     0.6411     0.6417     0%
+  gzip-6    3  hyperfine.min_s       0.639     0.6396     0.6411     0%
+  gzip-1    3  hyperfine.median_s       0.51     0.5302     0.5328     4%
+  gzip-1    3  hyperfine.min_s      0.5096     0.5265     0.5301     4%
 
-`ceteris run` captured the environment, ran the benchmark, captured again, and
-recorded one file holding the fingerprint *and* the number. Nothing to name,
-nothing to pair up later.
-
-```console
-$ ceteris compare --last 2
-2 runs compared. Declared varying: nothing
-
-MEASUREMENTS:
-  run       bandwidth_gbs  exit      wall
-  tuned-O3          30.85     0     0.52s
-  tuned-O0         51.269     0     0.60s
+NOISE FLOOR:
+  hyperfine.median_s signal        gap 21% exceeds the largest within-configuration spread of 4%
+  hyperfine.min_s  signal        gap 21% exceeds the largest within-configuration spread of 4%
 
 UNDECLARED DIFFERENCES (comparison is not valid):
-  build.cxx_flags           -O3 (tuned-O3)  vs  -O0 (tuned-O0)
-  execution.program         ./pingpong_O3 (tuned-O3)  vs  ./pingpong_O0 (tuned-O0)
-  execution.program_sha256  56d7060c5d6ea948be9d66f482b7614b0240ffde7b4a3… (tuned-O3)  vs  d82a3febc7d215d4d0c0d2d0d1293416a62b0b4adcd5c… (tuned-O0)
+  execution.program_args  -N, --warmup, 1, --runs, 5, gzip -6 -c /tmp/p… (gzip-6 x3)  vs  -N, --warmup, 1, --runs, 5, gzip -1 -c /tmp/p… (gzip-1 x3)
 
 DIFFERS, NOT GATING (informational severity):
-  execution.command         mpirun -n 2 ./pingpong_O3 1048576 200 (tuned-O3)  vs  mpirun -n 2 ./pingpong_O0 1048576 200 (tuned-O0)
+  execution.command       hyperfine -N --warmup 1 --runs 5 gzip -6 -c /… (gzip-6 x3)  vs  hyperfine -N --warmup 1 --runs 5 gzip -1 -c /… (gzip-1 x3)
+  system.load_1m          5 distinct values across 6 runs (range 2.57 to 2.71)
 
-Matched on 94 other fields.
+Matched on 112 other fields.
 $ echo $?
 1
 ```
 
-There is a 66% gap between those two numbers, and in this particular pair
-the *unoptimised* build came out ahead. The tool's answer is not "-O0 is
-66% faster" -- it is **you may not draw that conclusion**, because the build
-flags, the program and its binary hash all changed and none of it was
-declared. Once they are declared, the comparison certifies:
+The tool found a real 21% signal above a 4% noise floor -- and still refused,
+because the command line changed and nobody said that was the experiment.
+Declare it, and ask for a certificate:
 
 ```console
-$ ceteris compare --last 2 --vary build.cxx_flags --vary 'execution.program*'
-2 runs compared. Declared varying: build.cxx_flags, execution.program*
+$ ceteris compare --vary execution.program_args --require-signal --certify
+6 runs compared. Declared varying: execution.program_args
 
-MEASUREMENTS:
-  run       bandwidth_gbs  exit      wall
-  tuned-O3          30.85     0     0.52s
-  tuned-O0         51.269     0     0.60s
+MEASUREMENTS (per configuration):
+  configuration    n  metric                  min     median        max  spread
+  gzip-6    3  hyperfine.median_s     0.6401     0.6411     0.6417     0%
+  gzip-6    3  hyperfine.min_s       0.639     0.6396     0.6411     0%
+  gzip-1    3  hyperfine.median_s       0.51     0.5302     0.5328     4%
+  gzip-1    3  hyperfine.min_s      0.5096     0.5265     0.5301     4%
+
+NOISE FLOOR:
+  hyperfine.median_s signal        gap 21% exceeds the largest within-configuration spread of 4%
+  hyperfine.min_s  signal        gap 21% exceeds the largest within-configuration spread of 4%
 
 DECLARED VARYING (expected):
-  build.cxx_flags           -O3 (tuned-O3)  vs  -O0 (tuned-O0)
-  execution.program         ./pingpong_O3 (tuned-O3)  vs  ./pingpong_O0 (tuned-O0)
-  execution.program_sha256  56d7060c5d6ea948be9d66f482b7614b0240ffde7b4a3… (tuned-O3)  vs  d82a3febc7d215d4d0c0d2d0d1293416a62b0b4adcd5c… (tuned-O0)
+  execution.program_args  -N, --warmup, 1, --runs, 5, gzip -6 -c /tmp/p… (gzip-6 x3)  vs  -N, --warmup, 1, --runs, 5, gzip -1 -c /tmp/p… (gzip-1 x3)
 
 DIFFERS, NOT GATING (informational severity):
-  execution.command         mpirun -n 2 ./pingpong_O3 1048576 200 (tuned-O3)  vs  mpirun -n 2 ./pingpong_O0 1048576 200 (tuned-O0)
+  execution.command       hyperfine -N --warmup 1 --runs 5 gzip -6 -c /… (gzip-6 x3)  vs  hyperfine -N --warmup 1 --runs 5 gzip -1 -c /… (gzip-1 x3)
+  system.load_1m          5 distinct values across 6 runs (range 2.57 to 2.71)
 
-Matched on 94 other fields.
+Matched on 112 other fields.
 
 OK: every difference was declared. Comparison is valid.
+
+ceteris-certified v1 configs=2 n=3,3 vary=execution.program_args waive= strict=0 verdict=ok noise=4% sha256:b3969923f4e69dd904dfc11239aa4d6a719b67ca64434beb732e76aa13276969
 $ echo $?
 0
 ```
 
-Declaring only the flags is not enough, and that is deliberate: the binary
-hash is its own field, because **a stale build is the most common invalid
-comparison there is and git cannot see it.** The tree is clean, the commit is
-right, and the binary predates the last change.
+That last line is portable. Paste it into a README, a pull request or a
+paper's artifact appendix, and anyone holding the records can check it:
 
 ```console
-$ ceteris compare --last 2 --vary build.cxx_flags
-2 runs compared. Declared varying: build.cxx_flags
+$ ceteris verify 'ceteris-certified v1 configs=2 n=3,3 vary=execution.program_args waive= strict=0 verdict=ok noise=4% sha256:b3969923f4e69dd904dfc11239aa4d6a719b67ca64434beb732e76aa13276969' examples/hyperfine/*.json
+ceteris: verified: ok
+```
 
-MEASUREMENTS:
-  run       bandwidth_gbs  exit      wall
-  tuned-O3          30.85     0     0.52s
-  tuned-O0         51.269     0     0.60s
+The six records are committed under [`examples/hyperfine/`](examples/hyperfine/).
+
+## The other failure mode: a result that is not a result
+
+An MPI ping-pong ([`examples/pingpong.c`](examples/pingpong.c)) built at `-O3`
+and at `-O0`, three runs each, declaring the flags as the variable:
+
+```console
+$ ceteris compare examples/pingpong/*.json --vary build.cxx_flags
+6 runs compared. Declared varying: build.cxx_flags
+
+MEASUREMENTS (per configuration):
+  configuration    n  metric                  min     median        max  spread
+  tuned-O3    3  bandwidth_gbs         48.59      49.15       52.9     9%
+  tuned-O0    3  bandwidth_gbs          45.5      46.51      51.57    13%
+
+NOISE FLOOR:
+  bandwidth_gbs    WITHIN NOISE  gap 6% between configuration medians is not larger than the 13% spread within a single configuration
+
+CONFOUNDED WITH A DECLARED VARIABLE (re-run; do not waive):
+  execution.program moves in lockstep with build.cxx_flags:
+      build.cxx_flags = -O0  ->  execution.program = ./pingpong_O0  (3 runs)
+      build.cxx_flags = -O3  ->  execution.program = ./pingpong_O3  (3 runs)
+  execution.program_sha256 moves in lockstep with build.cxx_flags:
+      build.cxx_flags = -O0  ->  execution.program_sha256 = d82a3febc7d215d4d0c0d2d…  (3 runs)
+      build.cxx_flags = -O3  ->  execution.program_sha256 = 56d7060c5d6ea948be9d66f…  (3 runs)
 
 UNDECLARED DIFFERENCES (comparison is not valid):
-  execution.program         ./pingpong_O3 (tuned-O3)  vs  ./pingpong_O0 (tuned-O0)
-  execution.program_sha256  56d7060c5d6ea948be9d66f482b7614b0240ffde7b4a3… (tuned-O3)  vs  d82a3febc7d215d4d0c0d2d0d1293416a62b0b4adcd5c… (tuned-O0)
+  execution.program         ./pingpong_O3 (tuned-O3 x3)  vs  ./pingpong_O0 (tuned-O0 x3)
+  execution.program_sha256  56d7060c5d6ea948be9d66f482b7614b0240ffde7b4a3… (tuned-O3 x3)  vs  d82a3febc7d215d4d0c0d2d0d1293416a62b0b4adcd5c… (tuned-O0 x3)
 
 DECLARED VARYING (expected):
-  build.cxx_flags           -O3 (tuned-O3)  vs  -O0 (tuned-O0)
+  build.cxx_flags           -O3 (tuned-O3 x3)  vs  -O0 (tuned-O0 x3)
 
 DIFFERS, NOT GATING (informational severity):
-  execution.command         mpirun -n 2 ./pingpong_O3 1048576 200 (tuned-O3)  vs  mpirun -n 2 ./pingpong_O0 1048576 200 (tuned-O0)
+  execution.command         mpirun -n 2 ./pingpong_O3 1048576 200 (tuned-O3 x3)  vs  mpirun -n 2 ./pingpong_O0 1048576 200 (tuned-O0 x3)
+  system.load_1m            2.96 (tuned-O3 x2, tuned-O0 x3)  vs  2.78 (tuned-O3)
 
-Matched on 94 other fields.
+Matched on 126 other fields.
 $ echo $?
 1
 ```
 
-### It has to certify, too -- and the noise floor is the real yardstick
+Three things happened there, and each is a class of invalid comparison that
+gets published:
 
-A gate that always fails is a gate nobody keeps. Eight runs of the *identical*
-configuration, same binary and same command:
+- **WITHIN NOISE.** The 6% gap between the builds is smaller than the 13%
+  scatter inside one build. Two numbers is not a measurement.
+- **CONFOUNDED.** The binary hash moves in lockstep with the declared
+  variable. Of course it does -- they are different builds -- but that is
+  exactly what a stale build looks like too, and ceteris cannot tell the
+  difference. It asks you to declare it rather than waive it.
+- **`system.power_source = battery`** is in every one of these records. This
+  laptop was unplugged. That field compares equal here because it was equal
+  on every run; it would not have been equal against a run from last week.
 
-```console
-$ ceteris compare examples/noise/*.json
-8 runs compared. Declared varying: nothing
+## What it captures
 
-MEASUREMENTS:
-  run          bw  exit      wall
-  rep1     48.965     0     0.07s
-  rep2     49.444     0     0.08s
-  rep3      45.97     0     0.07s
-  rep4     52.838     0     0.07s
-  rep5     48.244     0     0.07s
-  rep6     49.114     0     0.07s
-  rep7     48.166     0     0.07s
-  rep8     46.686     0     0.07s
-
-Matched on 98 other fields.
-
-OK: every difference was declared. Comparison is valid.
-$ echo $?
-0
-```
-
-All eight certify. And the numbers run 46.0 to 52.8 GB/s, a **15% spread
-with nothing changed at all.** The quickstart pair sits well outside that
-band, in the wrong direction, and with nothing controlled there is no way to
-say what it measured: thermal state, a first-run effect, or the build. Two
-runs is not a measurement.
-
-`ceteris` makes no claim about statistical significance. What it does is stop
-you comparing two numbers unless the runs producing them were actually
-comparable, which is the precondition for any of the rest being worth doing.
-
-## Why wrapping the run is the whole point
-
-An earlier design had `capture` as a standalone command that you ran yourself
-and paired with your results by hand. That does not work, and it fails for the
-reason the underlying problem exists: **it is bookkeeping, and bookkeeping is
-what already failed.** A tool you have to remember to use fails the way the
-discipline it replaces failed.
-
-Wrapping the run gets four things a standalone capture cannot have:
-
-1. **The fingerprint is taken in the job's own context.** Put `ceteris run`
-   inside an sbatch script and it sees the compute nodes, the allocation and
-   the job environment -- not the login node you happened to type on.
-2. **The launcher command line is recorded for real** and split into launcher,
-   launcher arguments, program and program arguments, so `mpirun -n 16
-   --bind-to core` is captured rather than inferred, and sweeping a message
-   size passed as an argument does not also waive a change in rank count.
-3. **The benchmark binary is hashed**, so a rebuild is caught regardless of
-   what git says.
-4. **The environment is captured before *and* after**, so a change that happens
-   mid-run -- a module swap, a rebuild into the same tree -- is detected
-   instead of silently splitting the run in half.
-
-## On a cluster
-
-`ceteris run` sits inside the batch script, wrapping the launcher. A project
-config at `./ceteris.toml` is picked up automatically:
-
-```toml
-# ceteris.toml
-[metrics]
-latency_us = "avg latency ([0-9.]+) us"
-
-[capture]
-env_allowlist = ["MY_PROJECT_TUNABLE"]
-```
-
-```bash
-#!/bin/bash
-#SBATCH -N 16 -n 256 -p buran
-
-module load gcc/13 openmpi/5
-export LCI_ATTR_PACKET_SIZE=73728
-
-ceteris run --label "lci-$LCI_ATTR_PACKET_SIZE-$SLURM_JOB_ID" \
-    --repo ~/codes/hpx --cmake-cache ~/codes/hpx/build \
-    --store ~/campaigns/collectives \
-    -- srun ./bench_all_to_all --size 4096
-```
-
-**Every node is fingerprinted.** Under a multi-node allocation, capture fans
-out one short task per node with `srun` inside the allocation that already
-exists, and merges the node-local fields. A value identical on every node
-collapses to one; a value that differs becomes `[value, node count]` pairs, so
-two allocations with the same hardware mix compare equal regardless of which
-hosts they landed on, and one node with a different driver shows up as a
-difference. A node that fails to report makes every hardware field `unknown`:
-fifteen of sixteen nodes is not a fingerprint of the allocation.
-
-Then, after the campaign:
-
-```bash
-ceteris compare --store ~/campaigns/collectives --label 'lci-*' \
-    --vary runtime.env.LCI_ATTR_PACKET_SIZE
-```
-
-Non-zero exit means the campaign is confounded, so it gates a script directly.
-
-## The commands
-
-| | |
-|---|---|
-| `ceteris run -- CMD` | capture, run `CMD`, capture again, record it. Passes `CMD`'s exit code through. |
-| `ceteris compare` | check that runs differ only in what you declared. Non-zero if not. |
-| `ceteris list` | show recorded runs and their numbers |
-| `ceteris capture` | emit a fingerprint alone, without running anything |
-
-Runs land in `.ceteris/runs` by default, which ignores itself so it never
-dirties your repository; `--store` or `$CETERIS_STORE` moves it. `compare`
-takes files directly, or selects with `--last N` and `--label GLOB`.
-
-Also importable:
-
-```python
-from ceteris import compare
-from ceteris.runner import run_command
-
-a = run_command(["mpirun", "-n", "2", "./bench"], label="a")
-b = run_command(["mpirun", "-n", "2", "./bench"], label="b")
-assert compare([a, b]).exit_code == 0
-```
-
-Python 3.11 or newer. **No runtime dependencies.**
-
-## What a record looks like
-
-Real output, 98 fields / 524 lines, committed at
-[`examples/run-tuned-O3.json`](examples/run-tuned-O3.json). This is a verbatim
-excerpt of 30 fields -- every one that captured a value, plus a few that
-degraded.
+One record per run, ~131 fields, every field carrying its own provenance and one
+of four states. This is [`examples/pingpong/20260827-215234Z-tuned-O3-2.json`](examples/pingpong/20260827-215234Z-tuned-O3-2.json),
+excerpted to the 41 fields that carried a value plus a few that degraded:
 
 ```json
 {
@@ -383,9 +282,17 @@ degraded.
       "s": "value",
       "v": "15.7.7"
     },
-    "runtime.env.LCI_ATTR_PACKET_SIZE": {
+    "packs.active": {
+      "p": "pack activation",
+      "s": "value",
+      "v": [
+        "hpc",
+        "python"
+      ]
+    },
+    "runtime.env.OMP_NUM_THREADS": {
       "d": "unset",
-      "p": "$LCI_ATTR_PACKET_SIZE",
+      "p": "$OMP_NUM_THREADS",
       "s": "not_applicable"
     },
     "runtime.mpi_implementation": {
@@ -416,7 +323,7 @@ degraded.
     "source.commit": {
       "p": "git rev-parse HEAD",
       "s": "value",
-      "v": "5e88fdb5280e4de0bd37acf8ede7332bc3768a5f"
+      "v": "9c98a7b8a1b02cab930ecd27594502d6aa5d45bc"
     },
     "source.dirty": {
       "p": "git status --porcelain",
@@ -427,14 +334,66 @@ degraded.
       "p": "--repo",
       "s": "value",
       "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris"
+    },
+    "system.aslr": {
+      "p": "darwin policy",
+      "s": "value",
+      "v": "always-on"
+    },
+    "system.container": {
+      "p": "darwin",
+      "s": "value",
+      "v": "no"
+    },
+    "system.cpu_governor": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.load_1m": {
+      "p": "os.getloadavg()[0]",
+      "s": "value",
+      "v": 2.96
+    },
+    "system.power_source": {
+      "p": "pmset -g batt",
+      "s": "value",
+      "v": "battery"
+    },
+    "system.smt": {
+      "p": "sysctl hw.logicalcpu vs hw.physicalcpu",
+      "s": "value",
+      "v": "off"
+    },
+    "system.swap": {
+      "p": "sysctl -n vm.swapusage",
+      "s": "value",
+      "v": "in-use"
+    },
+    "system.thermal_throttle": {
+      "p": "pmset -g therm",
+      "s": "value",
+      "v": "none"
+    },
+    "system.virtualization": {
+      "p": "sysctl -n kern.hv_vmm_present",
+      "s": "value",
+      "v": "none"
+    },
+    "toolchain.python": {
+      "p": "python3 --version",
+      "s": "value",
+      "v": "3.14.7"
     }
   },
   "meta": {
-    "captured_at": "2026-08-27T11:10:49+00:00",
-    "content_hash": "e0cdedd8e85876e9e961a2aa9628632badf8b263e0dea06f347249ad95b699ef",
+    "captured_at": "2026-08-27T21:52:34+00:00",
+    "content_hash": "5b3cdc03723ca49d901834c23075cdb0a525e36d26c561c4ad232b4f18c7c042",
     "kind": "run",
     "label": "tuned-O3",
-    "schema_version": 1,
+    "repeat": 2,
+    "schema_version": 2,
+    "series": "tuned-O3@2026-08-27T21:52:34+00:00",
     "tool": "ceteris",
     "tool_version": "0.1.0"
   },
@@ -442,68 +401,55 @@ degraded.
     "bandwidth_gbs": {
       "p": "regex /bandwidth ([0-9.]+) GB/s/",
       "s": "value",
-      "v": 30.85
+      "v": 48.585
     }
   },
   "run": {
     "drift": [],
-    "duration_s": 0.519,
+    "duration_s": 0.072,
     "exit_code": 0,
-    "output": "size 1048576 bytes  iters 200  bandwidth 30.850 GB/s",
+    "output": "size 1048576 bytes  iters 200  bandwidth 48.585 GB/s",
     "output_truncated": false,
-    "started_at": "2026-08-27T11:10:49+00:00"
+    "started_at": "2026-08-27T21:52:34+00:00"
   }
 }
 ```
 
-Four things to notice, because they are the design:
+| namespace | what |
+|---|---|
+| `source` | commit, dirty flag, submodules |
+| `build` | compiler, flags, CMake cache entries |
+| `execution` | launcher, launcher args, program, program args, **sha256 of the binary** |
+| `system` | governor, turbo, SMT, ASLR, hugepages, power source, thermal throttle, load, container, VM |
+| `hardware` | CPU, NUMA, GPU model/count/driver, CUDA -- **for every node of an allocation** |
+| `runtime` | MPI implementation and version, transport configuration, tuning variables |
+| `toolchain`, `deps` | language toolchain versions, **lockfile hashes**, container image |
+| `parallelism`, `scheduler` | ranks, threads, binding intent, Slurm allocation |
 
-- **Every field records its own provenance** (`"p"`). When a comparison reports
-  a difference, the next question is always "how did you determine that", and
-  the answer is in the artifact rather than in the documentation.
-- **`captured_at` lives in `meta`, never in `fields`.** The content hash covers
-  the comparable body only, so two captures of an identical environment hash
-  identically and the files diff cleanly. Keys are sorted.
-- **An unset tuning variable is recorded as `not_applicable`, not omitted.**
-  That is what makes a tuned run and a default run differ *visibly* instead of
-  both being silently absent.
-- **Metrics sit outside `fields`.** They are the dependent variable -- what you
-  are measuring, and therefore what is *supposed* to differ. Holding them out
-  of the comparable body by construction is what stops the tool flagging every
-  real experiment.
+`runtime.env.*`, `toolchain.*` and `deps.*` come from **ecosystem packs** that
+activate from what is in the tree and on PATH: `Cargo.toml` turns on
+`RUSTFLAGS` and `Cargo.lock`; `mpirun` on PATH turns on LCI, UCX and OMPI
+variables; `nvidia-smi` turns on NCCL and CUDA. A Node project is never asked
+about UCX.
 
-## How a field can be
+### Four states, not two
 
-Four states, not two. The distinction that carries the most weight is
-`unknown` against `not_applicable`:
+| state | meaning |
+|---|---|
+| `value` | captured |
+| `not_applicable` | structurally absent -- no GPU in this machine |
+| `unknown` | may exist, could not be read -- `nvidia-smi` hung |
+| `error` | the collector itself failed |
 
-| state | meaning | example |
-|---|---|---|
-| `value` | captured | `source.commit = 81c60cb…` |
-| `not_applicable` | structurally absent | no GPU in this machine at all |
-| `unknown` | may exist, could not be read | `nvidia-smi` present but hung |
-| `error` | the collector itself failed | |
+Two GPU-less laptops agreeing on `not_applicable` is a match. A laptop
+against a GPU node is a difference. An `unknown` anywhere is neither: it is
+reported separately and the comparison is not certified, because the response
+differs -- a difference means the experiment is confounded, an unknown means
+the capture is incomplete.
 
-Two GPU-less laptops both report `not_applicable` for `hardware.gpu_driver`,
-and that is a genuine **match**. A laptop against a GPU node is
-`not_applicable` against a real version string, and that is a genuine
-**difference**. Collapsing the two states into one gets one of those cases
-wrong whichever way you collapse it.
-
-The rule that decides it: **a tool's absence implies the thing's absence only
-when the tool *is* the thing.** No `nvidia-smi` means no NVIDIA stack, so
-`not_applicable`. No `git` does *not* mean no commit -- the repository may be
-sitting right there, unreadable -- so `unknown`. Getting that backwards would
-let two runs that both lack `git` compare as agreeing on their source commit.
-
-An unknown is reported in its own section, separately from a difference,
-because the response differs: a difference means the experiment is confounded,
-an unknown means the capture is incomplete.
-
-`examples/run-b-gpu-probe-failed.json` is the one file here that was not
-captured: it is `run-a.json` with `hardware.gpu_driver` edited to the
-`unknown` state, because a hung `nvidia-smi` cannot be produced on a machine
-that has no `nvidia-smi`. The comparison output below is real.
+The rule: **a tool's absence implies the thing's absence only when the tool
+*is* the thing.** No `nvidia-smi` means no NVIDIA stack. No `git` does not
+mean no commit.
 
 ```console
 $ ceteris compare examples/run-a.json examples/run-b-gpu-probe-failed.json
@@ -514,121 +460,132 @@ UNKNOWN (could not be captured -- comparison is not certified):
       run-b-gpu-probe-failed: unknown: timed out after 10.0s
       run-a: known, <not applicable>
 
-Matched on 90 other fields.
+Matched on 107 other fields.
 $ echo $?
 2
 ```
 
-## Severity
+(`run-b-gpu-probe-failed.json` is `run-a.json` with one field hand-edited to
+`unknown`; a hung `nvidia-smi` cannot be produced on a machine without one.
+It is the only non-captured file in `examples/`.)
 
-If `scheduler.job_id` gated, every comparison would fail and the tool would be
-switched off within a week. Fields carry a severity, and only `critical` and
-`material` gate by default:
+## Harnesses it understands
 
-- **critical** -- `source.commit`, `source.dirty`, everything under `build.`,
-  the launcher and program parts of `execution.`, the binary hash, every
-  `runtime.env.*` tuning variable
-- **material** -- CPU and GPU model, node count, rank and thread counts, MPI
-  version, allocation shape
-- **informational** -- `scheduler.job_id`, `hardware.hostnames`,
-  `source.branch` (the branch name does not change the binary; the commit
-  does), the verbatim `execution.command`
+| harness | how it is recognised | what ceteris does |
+|---|---|---|
+| hyperfine | `hyperfine` on the command line | adds `--export-json` if absent, reads median and min |
+| Google Benchmark | any `--benchmark_*` flag | adds `--benchmark_out`, reads `real_time` |
+| pytest-benchmark | `pytest` with `--benchmark*` | adds `--benchmark-json`, reads medians |
+| JMH | `-rf json` | reads `-rff` output |
+| criterion | `cargo bench` | reads fresh `target/criterion/*/new/estimates.json` |
+| OSU micro-benchmarks | `osu_*` | parses the size/value table |
+| nccl-tests | `*_perf` | parses out-of-place busbw |
+| MLPerf loadgen | `mlperf` / `loadgen` in the command | reads `mlperf_log_summary.txt` |
 
-`--strict` promotes informational fields into the gate. Any field not listed
-defaults to **material**, so a field added in a later version gates by default
-rather than quietly escaping the check.
+Anything else: `--metric NAME='regex with one (group)'`, or `--ingest FILE`.
+A pattern that does not match records `unknown`, never zero. The hyperfine,
+Google Benchmark and pytest-benchmark parsers are tested against files those
+tools produced; the other five against formats reconstructed from their
+documentation, and say so in their tests.
+
+## Where it plugs in
+
+**Any script.** `ceteris run -- <command>` passes the command's exit code
+through, so wrapping changes nothing.
+
+**A batch job.** Inside the sbatch script, wrapping the launcher. Every node of
+the allocation is fingerprinted via a one-task-per-node `srun` inside the
+existing allocation; a node that fails to report makes the hardware fields
+`unknown`, because fifteen of sixteen nodes is not a fingerprint.
+
+```bash
+#SBATCH -N 16 -n 256
+export LCI_ATTR_PACKET_SIZE=73728
+ceteris run --label "lci-$LCI_ATTR_PACKET_SIZE" --repo ~/hpx --cmake-cache ~/hpx/build \
+    --store ~/campaigns/collectives -- srun ./bench_all_to_all --size 4096
+```
+
+**A pull request.** The action runs the benchmark on base and head in one job
+and fails the check unless the comparison is valid:
+
+```yaml
+- uses: iemAnshuman/ceteris@main
+  with:
+    command: hyperfine -N 'target/release/mytool bench.dat'
+    repeats: "5"
+    require-signal: "true"
+```
+
+**pytest.** `pytest --ceteris` records the session; with pytest-benchmark
+installed, its results come along.
+
+**A library.** `from ceteris import compare`, `from ceteris.runner import
+run_command`.
 
 ## Declaring intent
 
 ```sh
---vary runtime.env.LCI_ATTR_PACKET_SIZE   # exact
---vary 'runtime.env.LCI_*'                # glob -- a 40-config sweep cannot enumerate by hand
---vary build                              # bare prefix, covers every build.* field
---vary execution.program_args             # the sweep is in the arguments; rank count still gates
+--vary build.cxx_flags                  # exact
+--vary 'runtime.env.LCI_*'              # glob
+--vary execution.program_args           # the sweep is in the arguments; rank count still gates
 --waive hardware.cpu_model:"same partition, different node draw"
+--require-signal                        # exit 4 unless a metric beats the noise floor
+--strict                                # informational fields gate too
 ```
 
-`--vary` says *this is my independent variable*. `--waive` says *this differs
-and I have decided it does not matter*, and **the reason is mandatory** so the
-decision stays auditable six months later. Without an escape hatch the tool
-gets abandoned the first time two allocations land on different nodes.
-
-Two warnings you cannot get any other way: a declaration matching **no** field
-is flagged as a likely typo, and a declaration under which **nothing varied** is
-flagged, because that usually means the sweep script never applied the setting.
-
-## Metrics
-
-`--metric NAME=REGEX`, or a `[metrics]` table in `ceteris.toml`. One capture
-group per pattern. A pattern that does not match records `unknown` -- never a
-zero, never the last number that happened to appear, and never a silent
-omission.
+`--waive` needs a reason and the reason lands in the certificate. A declared
+field that did not vary is flagged (the sweep did not apply); a declaration
+matching no field is flagged (typo). Fields carry a severity -- `critical`
+and `material` gate, `informational` is shown -- and unlisted fields gate.
 
 ## Exit codes
 
 | code | meaning |
 |---|---|
-| 0 | comparable -- every difference was declared |
-| 1 | undeclared differences: the comparison is confounded |
-| 2 | indeterminate: something could not be captured, or a run drifted mid-flight |
-| 3 | usage error, unreadable input |
-
-1 wins when both 1 and 2 apply. `ceteris run` instead passes the wrapped
-command's own exit code through, so wrapping a benchmark does not change how a
-surrounding script behaves.
+| 0 | valid: every difference was declared |
+| 1 | undeclared differences, or a confound |
+| 2 | something could not be captured, or the environment changed mid-run |
+| 3 | usage |
+| 4 | valid but within noise (`--require-signal`) |
 
 ## Configuration
 
-Which variables and build keys matter differs per project, so they are data,
-not code. [`src/ceteris/defaults.toml`](src/ceteris/defaults.toml) ships a set
-for HPX / MPI / LCI / CUDA. `./ceteris.toml` (or `--config PATH`) extends it:
+`./ceteris.toml` is picked up automatically:
 
 ```toml
+packs = ["cuda"]                       # force a pack on
+
 [capture]
 env_allowlist = ["MY_PROJECT_TUNABLE"]
 
 [severity]
-"hardware.hostnames" = "critical"   # heterogeneous partition: the nodes matter
+"hardware.hostnames" = "critical"      # heterogeneous partition: the nodes matter
 
 [metrics]
-bandwidth_gbs = "bandwidth ([0-9.]+) GB/s"
+latency_us = "avg latency ([0-9.]+) us"
 ```
 
-JSON is accepted as well as TOML, so a cluster on an interpreter older than
-3.11 can still configure the tool without the package taking a TOML dependency.
+The record format is specified in [`docs/SPEC.md`](docs/SPEC.md) so that
+harnesses can emit it directly.
 
-## What this deliberately does not capture
+## What it does not do
 
-Every one of these could be filled with a plausible value. A guessed value in a
-fingerprint is precisely the class of error this tool exists to catch, so the
-gaps are left open and documented instead.
-
-- **The transport actually negotiated at run time.** `mpirun --version` and
-  `ompi_info` report what is *available*, not what was selected; UCX picks
-  transports during init, inside the job. Captured instead: the transport
-  *configuration* visible in the environment, which is a real observation.
-- **Per-rank observed CPU affinity.** Seeing where each rank actually landed
-  needs code inside every rank. Captured instead: the launcher arguments
-  (`--bind-to core` lives there), binding *intent* in the environment, and
-  each node's capture-process affinity mask where the OS exposes one.
-- **NUMA topology beyond a node count.** Low silent variance, high parsing
-  cost, largely implied by CPU model and partition.
-
-Emitting these as a permanent `unknown` would make every comparison
-uncertifiable; emitting them as `not_applicable` would be worse, because two
-runs that both failed to observe binding would compare as agreeing.
+- It does not measure. The harness measures; ceteris asks where the result went.
+- It does not claim statistical significance. Median and range, and the
+  honest word *unassessed* below three repeats.
+- It does not capture the transport MPI actually negotiated, per-rank
+  observed affinity, or NUMA topology beyond a node count. Each could be
+  filled with a plausible value, and a plausible value in a fingerprint is
+  the exact error the tool exists to catch.
 
 ## Status
 
-Alpha. The single-host path is exercised for real on macOS and Linux in CI.
-The Slurm fan-out and the CUDA collector are tested against recorded command
-output and hand-built per-node records; they have not yet run on a real
-allocation. If you run one, `ceteris capture -o fp.json` inside the job and
-the resulting file is the most useful thing you can send.
-
-## Tests
+Alpha. Exercised for real on macOS and Linux in CI, including the hyperfine
+path. The Slurm fan-out, CUDA and multi-node paths are tested against
+recorded and hand-built inputs and have not yet run on a real allocation. If
+you run one, `ceteris capture -o fp.json` inside the job is the most useful
+thing you can send.
 
 ```sh
-python -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest
+python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/python -m pytest
 ```

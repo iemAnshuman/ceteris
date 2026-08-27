@@ -1,16 +1,11 @@
 {
   "fields": {
+    "build.cmake.BUILD_SHARED_LIBS": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
     "build.cmake.CMAKE_BUILD_TYPE": {
-      "d": "no CMake cache captured",
-      "p": "--cmake-cache",
-      "s": "not_applicable"
-    },
-    "build.cmake.CMAKE_CUDA_ARCHITECTURES": {
-      "d": "no CMake cache captured",
-      "p": "--cmake-cache",
-      "s": "not_applicable"
-    },
-    "build.cmake.CMAKE_CUDA_FLAGS": {
       "d": "no CMake cache captured",
       "p": "--cmake-cache",
       "s": "not_applicable"
@@ -36,6 +31,21 @@
       "s": "not_applicable"
     },
     "build.cmake.CMAKE_CXX_STANDARD": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_C_COMPILER": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_C_FLAGS": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_INTERPROCEDURAL_OPTIMIZATION": {
       "d": "no CMake cache captured",
       "p": "--cmake-cache",
       "s": "not_applicable"
@@ -66,28 +76,68 @@
       "s": "not_applicable"
     },
     "build.compiler_id": {
-      "p": "c++ --version",
+      "p": "mpicc --version",
       "s": "value",
-      "v": "apple-clang"
+      "v": "clang"
     },
     "build.compiler_path": {
-      "p": "default c++ on PATH",
+      "p": "--compiler",
       "s": "value",
-      "v": "/usr/bin/c++"
+      "v": "/opt/homebrew/bin/mpicc"
     },
     "build.compiler_version": {
-      "p": "c++ --version",
+      "p": "mpicc --version",
       "s": "value",
-      "v": "17.0.0"
+      "v": "22.1.8"
     },
     "build.cxx_flags": {
-      "d": "no --cxx-flags, $CXXFLAGS, or CMake cache",
       "p": "--cxx-flags",
-      "s": "not_applicable"
+      "s": "value",
+      "v": "-O3"
     },
     "build.type": {
       "d": "no --build-type or CMake cache",
       "p": "--build-type",
+      "s": "not_applicable"
+    },
+    "deps.Pipfile.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/Pipfile.lock",
+      "s": "not_applicable"
+    },
+    "deps.conda-lock.yml": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/conda-lock.yml",
+      "s": "not_applicable"
+    },
+    "deps.container_image": {
+      "d": "no container image variable set",
+      "p": "$CONTAINER_IMAGE",
+      "s": "not_applicable"
+    },
+    "deps.environment.yml": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/environment.yml",
+      "s": "not_applicable"
+    },
+    "deps.poetry.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/poetry.lock",
+      "s": "not_applicable"
+    },
+    "deps.requirements.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/requirements.lock",
+      "s": "not_applicable"
+    },
+    "deps.requirements.txt": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/requirements.txt",
+      "s": "not_applicable"
+    },
+    "deps.uv.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/uv.lock",
       "s": "not_applicable"
     },
     "execution.command": {
@@ -203,6 +253,14 @@
       "s": "value",
       "v": "15.7.7"
     },
+    "packs.active": {
+      "p": "pack activation",
+      "s": "value",
+      "v": [
+        "hpc",
+        "python"
+      ]
+    },
     "parallelism.binding_intent": {
       "d": "no binding variables set",
       "p": "environment",
@@ -219,16 +277,6 @@
     },
     "parallelism.threads": {
       "d": "no thread-count variable set (OMP_NUM_THREADS, HPX_NUM_THREADS)",
-      "s": "not_applicable"
-    },
-    "runtime.env.CUDA_LAUNCH_BLOCKING": {
-      "d": "unset",
-      "p": "$CUDA_LAUNCH_BLOCKING",
-      "s": "not_applicable"
-    },
-    "runtime.env.CUDA_VISIBLE_DEVICES": {
-      "d": "unset",
-      "p": "$CUDA_VISIBLE_DEVICES",
       "s": "not_applicable"
     },
     "runtime.env.GOMP_CPU_AFFINITY": {
@@ -326,6 +374,31 @@
       "p": "$LCI_USE_DREG",
       "s": "not_applicable"
     },
+    "runtime.env.LD_LIBRARY_PATH": {
+      "d": "unset",
+      "p": "$LD_LIBRARY_PATH",
+      "s": "not_applicable"
+    },
+    "runtime.env.LD_PRELOAD": {
+      "d": "unset",
+      "p": "$LD_PRELOAD",
+      "s": "not_applicable"
+    },
+    "runtime.env.MALLOC_ARENA_MAX": {
+      "d": "unset",
+      "p": "$MALLOC_ARENA_MAX",
+      "s": "not_applicable"
+    },
+    "runtime.env.MALLOC_CONF": {
+      "d": "unset",
+      "p": "$MALLOC_CONF",
+      "s": "not_applicable"
+    },
+    "runtime.env.MKL_NUM_THREADS": {
+      "d": "unset",
+      "p": "$MKL_NUM_THREADS",
+      "s": "not_applicable"
+    },
     "runtime.env.MPICH_ASYNC_PROGRESS": {
       "d": "unset",
       "p": "$MPICH_ASYNC_PROGRESS",
@@ -336,9 +409,9 @@
       "p": "$MPICH_NEMESIS_NETMOD",
       "s": "not_applicable"
     },
-    "runtime.env.NVIDIA_VISIBLE_DEVICES": {
+    "runtime.env.NUMEXPR_NUM_THREADS": {
       "d": "unset",
-      "p": "$NVIDIA_VISIBLE_DEVICES",
+      "p": "$NUMEXPR_NUM_THREADS",
       "s": "not_applicable"
     },
     "runtime.env.OMPI_MCA_btl": {
@@ -379,6 +452,36 @@
     "runtime.env.OMP_SCHEDULE": {
       "d": "unset",
       "p": "$OMP_SCHEDULE",
+      "s": "not_applicable"
+    },
+    "runtime.env.OPENBLAS_NUM_THREADS": {
+      "d": "unset",
+      "p": "$OPENBLAS_NUM_THREADS",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONDONTWRITEBYTECODE": {
+      "d": "unset",
+      "p": "$PYTHONDONTWRITEBYTECODE",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONHASHSEED": {
+      "d": "unset",
+      "p": "$PYTHONHASHSEED",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONMALLOC": {
+      "d": "unset",
+      "p": "$PYTHONMALLOC",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONOPTIMIZE": {
+      "d": "unset",
+      "p": "$PYTHONOPTIMIZE",
+      "s": "not_applicable"
+    },
+    "runtime.env.TCMALLOC_RELEASE_RATE": {
+      "d": "unset",
+      "p": "$TCMALLOC_RELEASE_RATE",
       "s": "not_applicable"
     },
     "runtime.env.UCX_IB_GID_INDEX": {
@@ -479,7 +582,7 @@
     "source.commit": {
       "p": "git rev-parse HEAD",
       "s": "value",
-      "v": "5e88fdb5280e4de0bd37acf8ede7332bc3768a5f"
+      "v": "9c98a7b8a1b02cab930ecd27594502d6aa5d45bc"
     },
     "source.dirty": {
       "p": "git status --porcelain",
@@ -495,30 +598,97 @@
       "d": "repository has no submodules",
       "p": "git submodule status --recursive",
       "s": "not_applicable"
+    },
+    "system.aslr": {
+      "p": "darwin policy",
+      "s": "value",
+      "v": "always-on"
+    },
+    "system.container": {
+      "p": "darwin",
+      "s": "value",
+      "v": "no"
+    },
+    "system.cpu_governor": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.load_1m": {
+      "p": "os.getloadavg()[0]",
+      "s": "value",
+      "v": 2.96
+    },
+    "system.mem_available_mb": {
+      "d": "not tracked on darwin in this version",
+      "p": "sysctl",
+      "s": "not_applicable"
+    },
+    "system.power_source": {
+      "p": "pmset -g batt",
+      "s": "value",
+      "v": "battery"
+    },
+    "system.smt": {
+      "p": "sysctl hw.logicalcpu vs hw.physicalcpu",
+      "s": "value",
+      "v": "off"
+    },
+    "system.swap": {
+      "p": "sysctl -n vm.swapusage",
+      "s": "value",
+      "v": "in-use"
+    },
+    "system.thermal_throttle": {
+      "p": "pmset -g therm",
+      "s": "value",
+      "v": "none"
+    },
+    "system.transparent_hugepages": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.turbo": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.virtualization": {
+      "p": "sysctl -n kern.hv_vmm_present",
+      "s": "value",
+      "v": "none"
+    },
+    "toolchain.python": {
+      "p": "python3 --version",
+      "s": "value",
+      "v": "3.14.7"
     }
   },
   "meta": {
-    "captured_at": "2026-08-27T11:10:52+00:00",
-    "content_hash": "a11418d8ca6e83442fd0613aa4470b6c39d0b5c33e68f863fd96e8ad0b194f73",
+    "captured_at": "2026-08-27T21:52:34+00:00",
+    "content_hash": "5b3cdc03723ca49d901834c23075cdb0a525e36d26c561c4ad232b4f18c7c042",
     "kind": "run",
-    "label": "rep6",
-    "schema_version": 1,
+    "label": "tuned-O3",
+    "repeat": 2,
+    "schema_version": 2,
+    "series": "tuned-O3@2026-08-27T21:52:34+00:00",
     "tool": "ceteris",
     "tool_version": "0.1.0"
   },
   "metrics": {
-    "bw": {
+    "bandwidth_gbs": {
       "p": "regex /bandwidth ([0-9.]+) GB/s/",
       "s": "value",
-      "v": 49.114
+      "v": 48.585
     }
   },
   "run": {
     "drift": [],
-    "duration_s": 0.068,
+    "duration_s": 0.072,
     "exit_code": 0,
-    "output": "size 1048576 bytes  iters 200  bandwidth 49.114 GB/s\n",
+    "output": "size 1048576 bytes  iters 200  bandwidth 48.585 GB/s\n",
     "output_truncated": false,
-    "started_at": "2026-08-27T11:10:52+00:00"
+    "started_at": "2026-08-27T21:52:34+00:00"
   }
 }

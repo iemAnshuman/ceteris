@@ -1,16 +1,11 @@
 {
   "fields": {
+    "build.cmake.BUILD_SHARED_LIBS": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
     "build.cmake.CMAKE_BUILD_TYPE": {
-      "d": "no CMake cache captured",
-      "p": "--cmake-cache",
-      "s": "not_applicable"
-    },
-    "build.cmake.CMAKE_CUDA_ARCHITECTURES": {
-      "d": "no CMake cache captured",
-      "p": "--cmake-cache",
-      "s": "not_applicable"
-    },
-    "build.cmake.CMAKE_CUDA_FLAGS": {
       "d": "no CMake cache captured",
       "p": "--cmake-cache",
       "s": "not_applicable"
@@ -36,6 +31,21 @@
       "s": "not_applicable"
     },
     "build.cmake.CMAKE_CXX_STANDARD": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_C_COMPILER": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_C_FLAGS": {
+      "d": "no CMake cache captured",
+      "p": "--cmake-cache",
+      "s": "not_applicable"
+    },
+    "build.cmake.CMAKE_INTERPROCEDURAL_OPTIMIZATION": {
       "d": "no CMake cache captured",
       "p": "--cmake-cache",
       "s": "not_applicable"
@@ -90,46 +100,52 @@
       "p": "--build-type",
       "s": "not_applicable"
     },
+    "deps.container_image": {
+      "d": "no container image variable set",
+      "p": "$CONTAINER_IMAGE",
+      "s": "not_applicable"
+    },
     "execution.command": {
       "p": "wrapped command line",
       "s": "value",
-      "v": "mpirun -n 2 ./pingpong_O3 1048576 200"
+      "v": "hyperfine -N --warmup 1 --runs 5 gzip -1 -c /tmp/payload.txt"
     },
     "execution.launcher": {
+      "d": "no recognised launcher; program run directly",
       "p": "heuristic split of the wrapped command line",
-      "s": "value",
-      "v": "mpirun"
+      "s": "not_applicable"
     },
     "execution.launcher_args": {
+      "d": "no recognised launcher",
       "p": "heuristic split of the wrapped command line",
-      "s": "value",
-      "v": [
-        "-n",
-        "2"
-      ]
+      "s": "not_applicable"
     },
     "execution.program": {
       "p": "heuristic split of the wrapped command line",
       "s": "value",
-      "v": "./pingpong_O3"
+      "v": "hyperfine"
     },
     "execution.program_args": {
       "p": "heuristic split of the wrapped command line",
       "s": "value",
       "v": [
-        "1048576",
-        "200"
+        "-N",
+        "--warmup",
+        "1",
+        "--runs",
+        "5",
+        "gzip -1 -c /tmp/payload.txt"
       ]
     },
     "execution.program_sha256": {
-      "p": "sha256 of ./pingpong_O3",
+      "p": "sha256 of /opt/homebrew/bin/hyperfine",
       "s": "value",
-      "v": "56d7060c5d6ea948be9d66f482b7614b0240ffde7b4a392a4c78b5eb9ccf62b7"
+      "v": "0ba6ba0e83ab1684ef3c181ca71e611031b9e97eee274a85c608f7ba3f1453af"
     },
     "execution.workdir": {
       "p": "os.getcwd()",
       "s": "value",
-      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris"
+      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/examples/hyperfine"
     },
     "hardware.arch": {
       "p": "platform.uname().machine",
@@ -203,6 +219,13 @@
       "s": "value",
       "v": "15.7.7"
     },
+    "packs.active": {
+      "p": "pack activation",
+      "s": "value",
+      "v": [
+        "hpc"
+      ]
+    },
     "parallelism.binding_intent": {
       "d": "no binding variables set",
       "p": "environment",
@@ -219,16 +242,6 @@
     },
     "parallelism.threads": {
       "d": "no thread-count variable set (OMP_NUM_THREADS, HPX_NUM_THREADS)",
-      "s": "not_applicable"
-    },
-    "runtime.env.CUDA_LAUNCH_BLOCKING": {
-      "d": "unset",
-      "p": "$CUDA_LAUNCH_BLOCKING",
-      "s": "not_applicable"
-    },
-    "runtime.env.CUDA_VISIBLE_DEVICES": {
-      "d": "unset",
-      "p": "$CUDA_VISIBLE_DEVICES",
       "s": "not_applicable"
     },
     "runtime.env.GOMP_CPU_AFFINITY": {
@@ -326,6 +339,21 @@
       "p": "$LCI_USE_DREG",
       "s": "not_applicable"
     },
+    "runtime.env.LD_LIBRARY_PATH": {
+      "d": "unset",
+      "p": "$LD_LIBRARY_PATH",
+      "s": "not_applicable"
+    },
+    "runtime.env.LD_PRELOAD": {
+      "d": "unset",
+      "p": "$LD_PRELOAD",
+      "s": "not_applicable"
+    },
+    "runtime.env.MALLOC_CONF": {
+      "d": "unset",
+      "p": "$MALLOC_CONF",
+      "s": "not_applicable"
+    },
     "runtime.env.MPICH_ASYNC_PROGRESS": {
       "d": "unset",
       "p": "$MPICH_ASYNC_PROGRESS",
@@ -334,11 +362,6 @@
     "runtime.env.MPICH_NEMESIS_NETMOD": {
       "d": "unset",
       "p": "$MPICH_NEMESIS_NETMOD",
-      "s": "not_applicable"
-    },
-    "runtime.env.NVIDIA_VISIBLE_DEVICES": {
-      "d": "unset",
-      "p": "$NVIDIA_VISIBLE_DEVICES",
       "s": "not_applicable"
     },
     "runtime.env.OMPI_MCA_btl": {
@@ -379,6 +402,11 @@
     "runtime.env.OMP_SCHEDULE": {
       "d": "unset",
       "p": "$OMP_SCHEDULE",
+      "s": "not_applicable"
+    },
+    "runtime.env.TCMALLOC_RELEASE_RATE": {
+      "d": "unset",
+      "p": "$TCMALLOC_RELEASE_RATE",
       "s": "not_applicable"
     },
     "runtime.env.UCX_IB_GID_INDEX": {
@@ -479,7 +507,7 @@
     "source.commit": {
       "p": "git rev-parse HEAD",
       "s": "value",
-      "v": "5e88fdb5280e4de0bd37acf8ede7332bc3768a5f"
+      "v": "30f325bb004e662bf952e41a90c75e55e2a208d7"
     },
     "source.dirty": {
       "p": "git status --porcelain",
@@ -489,36 +517,104 @@
     "source.repo_path": {
       "p": "--repo",
       "s": "value",
-      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris"
+      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/examples/hyperfine"
     },
     "source.submodules": {
       "d": "repository has no submodules",
       "p": "git submodule status --recursive",
       "s": "not_applicable"
+    },
+    "system.aslr": {
+      "p": "darwin policy",
+      "s": "value",
+      "v": "always-on"
+    },
+    "system.container": {
+      "p": "darwin",
+      "s": "value",
+      "v": "no"
+    },
+    "system.cpu_governor": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.load_1m": {
+      "p": "os.getloadavg()[0]",
+      "s": "value",
+      "v": 2.71
+    },
+    "system.mem_available_mb": {
+      "d": "not tracked on darwin in this version",
+      "p": "sysctl",
+      "s": "not_applicable"
+    },
+    "system.power_source": {
+      "p": "pmset -g batt",
+      "s": "value",
+      "v": "battery"
+    },
+    "system.smt": {
+      "p": "sysctl hw.logicalcpu vs hw.physicalcpu",
+      "s": "value",
+      "v": "off"
+    },
+    "system.swap": {
+      "p": "sysctl -n vm.swapusage",
+      "s": "value",
+      "v": "in-use"
+    },
+    "system.thermal_throttle": {
+      "p": "pmset -g therm",
+      "s": "value",
+      "v": "none"
+    },
+    "system.transparent_hugepages": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.turbo": {
+      "d": "darwin does not expose this",
+      "p": "sysfs",
+      "s": "not_applicable"
+    },
+    "system.virtualization": {
+      "p": "sysctl -n kern.hv_vmm_present",
+      "s": "value",
+      "v": "none"
     }
   },
   "meta": {
-    "captured_at": "2026-08-27T11:10:51+00:00",
-    "content_hash": "a11418d8ca6e83442fd0613aa4470b6c39d0b5c33e68f863fd96e8ad0b194f73",
+    "adapter": "hyperfine",
+    "captured_at": "2026-08-27T21:54:02+00:00",
+    "content_hash": "7d7b326bd3fa49436e68699e2bf20286615fbe3c3977384b8f563f0ed4fe486f",
     "kind": "run",
-    "label": "rep2",
-    "schema_version": 1,
+    "label": "gzip-1",
+    "repeat": 2,
+    "schema_version": 2,
+    "series": "gzip-1@2026-08-27T21:53:59+00:00",
     "tool": "ceteris",
     "tool_version": "0.1.0"
   },
   "metrics": {
-    "bw": {
-      "p": "regex /bandwidth ([0-9.]+) GB/s/",
+    "hyperfine.median_s": {
+      "p": "hyperfine --export-json (injected); command: gzip -1 -c /tmp/payload.txt",
       "s": "value",
-      "v": 49.444
+      "v": 0.532757834
+    },
+    "hyperfine.min_s": {
+      "p": "hyperfine --export-json (injected); command: gzip -1 -c /tmp/payload.txt",
+      "s": "value",
+      "v": 0.5300604170000001
     }
   },
   "run": {
     "drift": [],
-    "duration_s": 0.079,
+    "duration_s": 3.195,
     "exit_code": 0,
-    "output": "size 1048576 bytes  iters 200  bandwidth 49.444 GB/s\n",
+    "output": "Benchmark 1: gzip -1 -c /tmp/payload.txt\n  Time (mean \u00b1 \u03c3):     532.3 ms \u00b1   1.3 ms    [User: 524.0 ms, System: 6.5 ms]\n  Range (min \u2026 max):   530.1 ms \u2026 533.1 ms    5 runs\n \n",
     "output_truncated": false,
-    "started_at": "2026-08-27T11:10:51+00:00"
+    "started_at": "2026-08-27T21:54:02+00:00"
   }
 }

@@ -76,34 +76,110 @@
       "s": "not_applicable"
     },
     "build.compiler_id": {
-      "p": "/usr/bin/c++ --version",
+      "p": "mpicc --version",
       "s": "value",
-      "v": "apple-clang"
+      "v": "clang"
     },
     "build.compiler_path": {
       "p": "--compiler",
       "s": "value",
-      "v": "/usr/bin/c++"
+      "v": "/opt/homebrew/bin/mpicc"
     },
     "build.compiler_version": {
-      "p": "/usr/bin/c++ --version",
+      "p": "mpicc --version",
       "s": "value",
-      "v": "17.0.0"
+      "v": "22.1.8"
     },
     "build.cxx_flags": {
-      "d": "no --cxx-flags, $CXXFLAGS, or CMake cache",
       "p": "--cxx-flags",
-      "s": "not_applicable"
+      "s": "value",
+      "v": "-O0"
     },
     "build.type": {
       "d": "no --build-type or CMake cache",
       "p": "--build-type",
       "s": "not_applicable"
     },
+    "deps.Pipfile.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/Pipfile.lock",
+      "s": "not_applicable"
+    },
+    "deps.conda-lock.yml": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/conda-lock.yml",
+      "s": "not_applicable"
+    },
     "deps.container_image": {
       "d": "no container image variable set",
       "p": "$CONTAINER_IMAGE",
       "s": "not_applicable"
+    },
+    "deps.environment.yml": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/environment.yml",
+      "s": "not_applicable"
+    },
+    "deps.poetry.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/poetry.lock",
+      "s": "not_applicable"
+    },
+    "deps.requirements.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/requirements.lock",
+      "s": "not_applicable"
+    },
+    "deps.requirements.txt": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/requirements.txt",
+      "s": "not_applicable"
+    },
+    "deps.uv.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/uv.lock",
+      "s": "not_applicable"
+    },
+    "execution.command": {
+      "p": "wrapped command line",
+      "s": "value",
+      "v": "mpirun -n 2 ./pingpong_O0 1048576 200"
+    },
+    "execution.launcher": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": "mpirun"
+    },
+    "execution.launcher_args": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": [
+        "-n",
+        "2"
+      ]
+    },
+    "execution.program": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": "./pingpong_O0"
+    },
+    "execution.program_args": {
+      "p": "heuristic split of the wrapped command line",
+      "s": "value",
+      "v": [
+        "1048576",
+        "200"
+      ]
+    },
+    "execution.program_sha256": {
+      "p": "sha256 of ./pingpong_O0",
+      "s": "value",
+      "v": "d82a3febc7d215d4d0c0d2d0d1293416a62b0b4adcd5c5221c4cf3796730c0f8"
+    },
+    "execution.workdir": {
+      "p": "os.getcwd()",
+      "s": "value",
+      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris"
     },
     "hardware.arch": {
       "p": "platform.uname().machine",
@@ -136,9 +212,9 @@
       "s": "not_applicable"
     },
     "hardware.gpu_driver": {
-      "d": "timed out after 10.0s",
-      "p": "nvidia-smi --query-gpu=name,driver_version --format=csv,noheader",
-      "s": "unknown"
+      "d": "nvidia-smi not on PATH",
+      "p": "nvidia-smi",
+      "s": "not_applicable"
     },
     "hardware.gpu_models": {
       "d": "nvidia-smi not on PATH",
@@ -181,7 +257,8 @@
       "p": "pack activation",
       "s": "value",
       "v": [
-        "hpc"
+        "hpc",
+        "python"
       ]
     },
     "parallelism.binding_intent": {
@@ -307,9 +384,19 @@
       "p": "$LD_PRELOAD",
       "s": "not_applicable"
     },
+    "runtime.env.MALLOC_ARENA_MAX": {
+      "d": "unset",
+      "p": "$MALLOC_ARENA_MAX",
+      "s": "not_applicable"
+    },
     "runtime.env.MALLOC_CONF": {
       "d": "unset",
       "p": "$MALLOC_CONF",
+      "s": "not_applicable"
+    },
+    "runtime.env.MKL_NUM_THREADS": {
+      "d": "unset",
+      "p": "$MKL_NUM_THREADS",
       "s": "not_applicable"
     },
     "runtime.env.MPICH_ASYNC_PROGRESS": {
@@ -320,6 +407,11 @@
     "runtime.env.MPICH_NEMESIS_NETMOD": {
       "d": "unset",
       "p": "$MPICH_NEMESIS_NETMOD",
+      "s": "not_applicable"
+    },
+    "runtime.env.NUMEXPR_NUM_THREADS": {
+      "d": "unset",
+      "p": "$NUMEXPR_NUM_THREADS",
       "s": "not_applicable"
     },
     "runtime.env.OMPI_MCA_btl": {
@@ -360,6 +452,31 @@
     "runtime.env.OMP_SCHEDULE": {
       "d": "unset",
       "p": "$OMP_SCHEDULE",
+      "s": "not_applicable"
+    },
+    "runtime.env.OPENBLAS_NUM_THREADS": {
+      "d": "unset",
+      "p": "$OPENBLAS_NUM_THREADS",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONDONTWRITEBYTECODE": {
+      "d": "unset",
+      "p": "$PYTHONDONTWRITEBYTECODE",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONHASHSEED": {
+      "d": "unset",
+      "p": "$PYTHONHASHSEED",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONMALLOC": {
+      "d": "unset",
+      "p": "$PYTHONMALLOC",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONOPTIMIZE": {
+      "d": "unset",
+      "p": "$PYTHONOPTIMIZE",
       "s": "not_applicable"
     },
     "runtime.env.TCMALLOC_RELEASE_RATE": {
@@ -460,12 +577,12 @@
     "source.branch": {
       "p": "git branch --show-current",
       "s": "value",
-      "v": "fix/thread-queue-waittime-name"
+      "v": "main"
     },
     "source.commit": {
       "p": "git rev-parse HEAD",
       "s": "value",
-      "v": "81c60cb7319de99b8b75b539b879351af214006e"
+      "v": "9c98a7b8a1b02cab930ecd27594502d6aa5d45bc"
     },
     "source.dirty": {
       "p": "git status --porcelain",
@@ -475,7 +592,7 @@
     "source.repo_path": {
       "p": "--repo",
       "s": "value",
-      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/hpx"
+      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris"
     },
     "source.submodules": {
       "d": "repository has no submodules",
@@ -541,14 +658,37 @@
       "p": "sysctl -n kern.hv_vmm_present",
       "s": "value",
       "v": "none"
+    },
+    "toolchain.python": {
+      "p": "python3 --version",
+      "s": "value",
+      "v": "3.14.7"
     }
   },
   "meta": {
-    "captured_at": "2026-08-27T21:52:37+00:00",
-    "content_hash": "56295e34be963bb31bd539c25d29ca36e30729d0fadbe9efa73665557a683db0",
-    "label": "run-b-gpu-probe-failed",
+    "captured_at": "2026-08-27T21:52:35+00:00",
+    "content_hash": "bdc7ba987b38a6ab089ca978465cd6e6e26ac44b319cec31dfe69dd0cb86529d",
+    "kind": "run",
+    "label": "tuned-O0",
+    "repeat": 1,
     "schema_version": 2,
+    "series": "tuned-O0@2026-08-27T21:52:35+00:00",
     "tool": "ceteris",
     "tool_version": "0.1.0"
+  },
+  "metrics": {
+    "bandwidth_gbs": {
+      "p": "regex /bandwidth ([0-9.]+) GB/s/",
+      "s": "value",
+      "v": 51.571
+    }
+  },
+  "run": {
+    "drift": [],
+    "duration_s": 0.346,
+    "exit_code": 0,
+    "output": "size 1048576 bytes  iters 200  bandwidth 51.571 GB/s\n",
+    "output_truncated": false,
+    "started_at": "2026-08-27T21:52:35+00:00"
   }
 }

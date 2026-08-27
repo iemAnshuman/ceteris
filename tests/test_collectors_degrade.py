@@ -9,6 +9,7 @@ what is checkable here.
 from __future__ import annotations
 
 import json
+import sys
 
 import pytest
 
@@ -290,3 +291,14 @@ def test_two_runs_without_git_do_not_match_on_commit(monkeypatch, ctx, tmp_path)
     a = Fingerprint(dict(fields), {"label": "run-a"})
     b = Fingerprint(dict(fields), {"label": "run-b"})
     assert compare([a, b], cfg=ctx.cfg).exit_code == EXIT_INDETERMINATE
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="exercises the real linux CPU path")
+def test_linux_cpu_fields_are_real_values_on_linux(cfg):
+    """On CI this is the first time the linux collector runs against a real
+    /proc/cpuinfo rather than a fixture."""
+    out = hw_col.collect(Context(cfg=cfg))
+    assert out["hardware.cpu_model"].state is State.VALUE
+    assert out["hardware.cpu_cores_logical"].state is State.VALUE
+    assert out["hardware.numa_nodes"].state in (State.VALUE, State.NOT_APPLICABLE)
+    assert out["hardware.gpu_models"].state is State.NOT_APPLICABLE

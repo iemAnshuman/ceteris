@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest -q
+      # The tool must produce a valid fingerprint on a bare runner with no
+      # MPI, GPU or scheduler. A collector that errors here fails the build.
+      - run: |
+          ceteris capture --repo . -o fp.json
+          python -c "import json,sys; f=json.load(open('fp.json'))['fields']; bad=[k for k,v in f.items() if v['s']=='error']; print(len(f),'fields'); sys.exit(bad and print(bad))"
+      # The exit-code contract is the CI integration; check it on the real binary.
+      - run: |
+          ceteris compare examples/run-tuned-O3.json examples/run-tuned-O0.json; test $? -eq 1
+          ceteris compare examples/run-tuned-O3.json examples/run-tuned-O0.json --vary build.cxx_flags --vary execution; test $? -eq 0
+          ceteris compare examples/run-a.json examples/run-b-gpu-probe-failed.json; test $? -eq 2
+        shell: bash

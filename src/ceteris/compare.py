@@ -93,6 +93,22 @@ class FieldResult:
 
 
 @dataclass
+class Confound:
+    """An undeclared field whose value is a function of a declared one.
+
+    Three transports across two commits, with the commit constant inside each
+    transport group, is the textbook case: whatever the transport result is,
+    it is inseparable from the commit. Detectable from the partition of runs
+    each field induces, and reported as its own thing because the fix is
+    different from an ordinary violation -- re-run, do not waive.
+    """
+
+    undeclared: str
+    declared: str
+    table: list[tuple[str, str, int]]   # (declared value, undeclared value, count)
+
+
+@dataclass
 class Report:
     labels: list[str]
     declared: list[str]
@@ -115,6 +131,7 @@ class Report:
     noise: list[stats.NoiseVerdict] = field(default_factory=list)
     require_signal: bool = False
     warnings: list[str] = field(default_factory=list)
+    confounds: list[Confound] = field(default_factory=list)
 
     def by_class(self, *classes: Classification) -> list[FieldResult]:
         wanted = set(classes)
@@ -278,6 +295,7 @@ def compare(
         elif all(r.verdict is Verdict.MATCH for r in covered):
             constant.append(pattern)
 
+    confounds = _confounds(results)
     configs = stats.group_configs(fingerprints, cfg)
     noise = [stats.noise_verdict(configs, m) for m in stats.metric_names(configs)]
     warnings = []
@@ -301,4 +319,28 @@ def compare(
         noise=noise,
         require_signal=require_signal,
         warnings=warnings,
+        confounds=confounds,
     )
+
+
+def _confounds(results: list[FieldResult]) -> list[Confound]:
+    declared = [r for r in results if r.classification is Classification.DECLARED]
+    violations = [r for r in results if r.classification is Classification.VIOLATION]
+    found: list[Confound] = []
+    for d in declared:
+        d_of = {label: g.display for g in d.groups for label in g.labels}
+        for u in violations:
+            u_of = {label: g.display for g in u.groups for label in g.labels}
+            labels = [l for l in d_of if l in u_of]
+            if not labels:
+                continue
+            # u is a function of d: every d-group maps to exactly one u-value.
+            mapping: dict[str, set[str]] = {}
+            for l in labels:
+                mapping.setdefault(d_of[l], set()).add(u_of[l])
+            if all(len(v) == 1 for v in mapping.values()) and len({next(iter(v)) for v in mapping.values()}) > 1:
+                counts: dict[tuple[str, str], int] = {}
+                for l in labels:
+                    counts[(d_of[l], u_of[l])] = counts.get((d_of[l], u_of[l]), 0) + 1
+                found.append(Confound(u.path, d.path, sorted((a, b, n) for (a, b), n in counts.items())))
+    return found

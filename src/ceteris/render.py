@@ -170,6 +170,14 @@ def render(report: Report) -> str:
                 out.append(f"      ... and {len(fingerprint.drift) - 6} more")
         out.append("")
 
+    if report.confounds:
+        out.append("CONFOUNDED WITH A DECLARED VARIABLE (re-run; do not waive):")
+        for c in report.confounds:
+            out.append(f"  {c.undeclared} moves in lockstep with {c.declared}:")
+            for d_val, u_val, n in c.table:
+                out.append(f"      {c.declared} = {_clip(d_val, 24)}  ->  {c.undeclared} = {_clip(u_val, 24)}  ({n} run{'s' if n != 1 else ''})")
+        out.append("")
+
     if violations:
         out.append("UNDECLARED DIFFERENCES (comparison is not valid):")
         out.extend(_field_lines(violations, width))
@@ -238,6 +246,11 @@ def to_json(report: Report) -> dict[str, Any]:
         "exit_code": report.exit_code,
         "matched": report.matched_count,
         "warnings": report.warnings,
+        "confounds": [
+            {"undeclared": c.undeclared, "declared": c.declared,
+             "table": [{"declared_value": a, "undeclared_value": b, "runs": n} for a, b, n in c.table]}
+            for c in report.confounds
+        ],
         "configurations": [
             {"label": g.label, "content_hash": g.content_hash, "n": g.n,
              "runs": [fp.label for fp in g.members],

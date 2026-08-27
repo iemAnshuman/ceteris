@@ -278,7 +278,7 @@ def compare(
         elif all(r.verdict is Verdict.MATCH for r in covered):
             constant.append(pattern)
 
-    configs = stats.group_configs(fingerprints)
+    configs = stats.group_configs(fingerprints, cfg)
     noise = [stats.noise_verdict(configs, m) for m in stats.metric_names(configs)]
     warnings = []
     versions = sorted({fp.schema_version for fp in fingerprints})

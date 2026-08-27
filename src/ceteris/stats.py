@@ -14,9 +14,24 @@ from dataclasses import dataclass, field
 from statistics import median
 from typing import Sequence
 
+from .config import GATING_SEVERITIES, Config
 from .model import Fingerprint, State
 
 MIN_REPEATS = 3
+
+
+def config_key(fp: Fingerprint, cfg: Config) -> str:
+    """Identity of a configuration: a hash over the gating fields only.
+
+    The record's content hash covers every field, including informational
+    ones like the load average that differ between any two moments. Grouping
+    on that would make every repeat its own configuration.
+    """
+    import hashlib
+    import json
+
+    body = {k: fp.fields[k].to_json() for k in sorted(fp.fields) if cfg.severity_of(k) in GATING_SEVERITIES}
+    return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 @dataclass
@@ -65,10 +80,11 @@ class NoiseVerdict:
     reason: str
 
 
-def group_configs(fingerprints: Sequence[Fingerprint]) -> list[ConfigGroup]:
+def group_configs(fingerprints: Sequence[Fingerprint], cfg: Config | None = None) -> list[ConfigGroup]:
+    cfg = cfg or Config.load()
     groups: dict[str, ConfigGroup] = {}
     for fp in fingerprints:
-        h = fp.content_hash()
+        h = config_key(fp, cfg)
         if h not in groups:
             groups[h] = ConfigGroup(content_hash=h, label=fp.label)
         groups[h].members.append(fp)

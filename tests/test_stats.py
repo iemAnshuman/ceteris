@@ -66,7 +66,15 @@ def test_run_repeated_shares_a_series_and_a_configuration(cfg):
                            label="rep", metric_patterns={"bw": r"bw (\d+)"})
     assert len({r.meta["series"] for r in records}) == 1
     assert [r.meta["repeat"] for r in records] == [1, 2, 3]
-    assert len(stats.group_configs(records)) == 1
+    assert len(stats.group_configs(records, cfg)) == 1
+
+
+def test_informational_fields_do_not_split_configurations(cfg):
+    from ceteris.model import Fingerprint, value
+    a = Fingerprint({"source.commit": value("x"), "system.load_1m": value(1.0)}, {"label": "a"})
+    b = Fingerprint({"source.commit": value("x"), "system.load_1m": value(9.0)}, {"label": "a"})
+    assert len(stats.group_configs([a, b], cfg)) == 1
+    assert a.content_hash() != b.content_hash()  # the artifact hash still sees everything
 
 
 def test_cli_repeats_and_require_signal(tmp_path, monkeypatch, capsys):

@@ -32,7 +32,7 @@ Collector = Callable[[Context], "dict[str, Field]"]
 
 
 def registry() -> dict[str, Collector]:
-    from . import build, hardware, parallelism, runtime, scheduler, source, system
+    from . import build, deps, hardware, parallelism, runtime, scheduler, source, system
 
     return {
         "source": source.collect,
@@ -42,6 +42,7 @@ def registry() -> dict[str, Collector]:
         "hardware": hardware.collect,
         "scheduler": scheduler.collect,
         "system": system.collect,
+        "deps": deps.collect,
     }
 
 

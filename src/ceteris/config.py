@@ -45,9 +45,13 @@ class Config:
     comparators: dict[str, str] = field(default_factory=dict)
     # name -> regex with one capture group, applied to `ceteris run` output.
     metrics: dict[str, str] = field(default_factory=dict)
+    # Packs from config: names to force on. Resolved packs live in active_packs.
+    packs: list[str] = field(default_factory=list)
+    active_packs: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def load(cls, user_path: str | Path | None = None) -> "Config":
+    def load(cls, user_path: str | Path | None = None, packs: list[str] | None = None,
+             tree: str | None = None) -> "Config":
         """Load defaults, then the project config.
 
         With no explicit path, ./ceteris.toml (or ./ceteris.json) is used if
@@ -66,11 +70,22 @@ class Config:
             severity=dict(raw.get("severity", {})),
             comparators=dict(raw.get("comparators", {})),
             metrics=dict(raw.get("metrics", {})),
+            packs=list(raw.get("packs", [])),
         )
         if user_path is not None:
             cfg.merge(_load_file(Path(user_path)))
         cfg.validate()
+        cfg.activate_packs(list(cfg.packs) + list(packs or []), tree)
         return cfg
+
+    def activate_packs(self, forced: list[str], tree: str | None) -> None:
+        """Merge every applicable ecosystem pack into the capture lists."""
+        from . import packs as packs_mod
+
+        tree = str(Path(tree or ".").expanduser())
+        self.active_packs = packs_mod.select(tree, forced)
+        for _name, (pack, _why) in sorted(self.active_packs.items()):
+            self.merge({"capture": pack.get("capture", {})})
 
     def merge(self, raw: dict[str, Any]) -> None:
         capture = raw.get("capture", {})
@@ -83,6 +98,9 @@ class Config:
         self.severity.update(raw.get("severity", {}))
         self.comparators.update(raw.get("comparators", {}))
         self.metrics.update(raw.get("metrics", {}))
+        for name in raw.get("packs", []):
+            if name not in self.packs:
+                self.packs.append(name)
 
     def validate(self) -> None:
         for pattern, sev in self.severity.items():

@@ -8,26 +8,19 @@
 # not_applicable, so "tuned vs default" shows up as a difference rather than as
 # two absent values that quietly match.
 env_allowlist = [
-  "LCI_ATTR_PACKET_SIZE", "LCI_SERVER", "LCI_ATTR_MAX_SENDS", "LCI_ATTR_MAX_RECVS",
-  "LCI_ATTR_MAX_CQ_SIZE", "LCI_IBV_ENABLE_TD", "LCI_USE_DREG", "LCI_PACKET_SIZE",
-  "OMPI_MCA_pml", "OMPI_MCA_btl", "OMPI_MCA_osc", "OMPI_MCA_coll",
-  "UCX_TLS", "UCX_NET_DEVICES", "UCX_IB_GID_INDEX", "UCX_RNDV_THRESH",
-  "MPICH_ASYNC_PROGRESS", "MPICH_NEMESIS_NETMOD",
+  # Ecosystem-neutral. MPI/LCI/HPX, CUDA, Rust, JVM, Go, Node and Python
+  # variables live in packs (src/ceteris/packs/*.toml) and are merged in
+  # when the pack activates.
   "OMP_NUM_THREADS", "OMP_PROC_BIND", "OMP_PLACES", "OMP_SCHEDULE",
-  "HPX_NUM_THREADS", "HPX_THREAD_BINDING", "HPX_PARCEL_TCP_ENABLE",
-  "HPX_PARCEL_LCI_ENABLE", "HPX_PARCEL_MPI_ENABLE", "HPX_HAVE_NETWORKING",
-  "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES", "CUDA_LAUNCH_BLOCKING",
-  "I_MPI_PIN", "I_MPI_PIN_DOMAIN", "I_MPI_FABRICS",
   "GOMP_CPU_AFFINITY", "KMP_AFFINITY",
+  "LD_PRELOAD", "LD_LIBRARY_PATH", "MALLOC_CONF", "TCMALLOC_RELEASE_RATE",
 ]
 
 # CMakeCache.txt entries pulled when --cmake-cache points at a build tree.
 cmake_keys = [
-  "CMAKE_BUILD_TYPE", "CMAKE_CXX_COMPILER", "CMAKE_CXX_FLAGS",
-  "CMAKE_CXX_FLAGS_RELEASE", "CMAKE_CXX_FLAGS_RELWITHDEBINFO",
-  "CMAKE_CXX_STANDARD", "CMAKE_CUDA_ARCHITECTURES", "CMAKE_CUDA_FLAGS",
-  "HPX_WITH_PARCELPORT_LCI", "HPX_WITH_PARCELPORT_MPI",
-  "HPX_WITH_MAX_CPU_COUNT", "HPX_WITH_MALLOC",
+  "CMAKE_BUILD_TYPE", "CMAKE_CXX_COMPILER", "CMAKE_C_COMPILER", "CMAKE_CXX_FLAGS",
+  "CMAKE_C_FLAGS", "CMAKE_CXX_FLAGS_RELEASE", "CMAKE_CXX_FLAGS_RELWITHDEBINFO",
+  "CMAKE_CXX_STANDARD", "CMAKE_INTERPROCEDURAL_OPTIMIZATION", "BUILD_SHARED_LIBS",
 ]
 
 # Severity decides what gates. Patterns are fnmatch globs, longest match wins.
@@ -61,6 +54,10 @@ cmake_keys = [
 # System state. These are what the benchmarking guides tell you to pin down
 # by hand. Load and memory are informational: they vary between any two
 # moments and gating on them would fail every comparison.
+"toolchain.*" = "critical"
+"deps.*" = "critical"
+"packs.active" = "material"
+
 "system.load_1m" = "informational"
 "system.mem_available_mb" = "informational"
 "system.*" = "material"

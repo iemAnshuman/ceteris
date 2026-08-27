@@ -41,6 +41,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cap.add_argument("--build-type", help="build type to record, e.g. Release")
     cap.add_argument("--label", help="name for this run in comparison output")
     cap.add_argument("--config", help="TOML or JSON config extending the defaults")
+    cap.add_argument("--pack", action="append", default=[], metavar="NAME", help="force an ecosystem pack on. Repeatable.")
     cap.add_argument("-o", "--output", help="write here instead of stdout")
 
     run = sub.add_parser(
@@ -65,6 +66,12 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="NAME=REGEX",
         help="extract a number from the run output. Repeatable.",
     )
+    run.add_argument("--adapter", metavar="NAME",
+                     help="force a harness adapter (hyperfine, gbench, pytest, jmh, criterion, osu, nccl, mlperf) or 'none'")
+    run.add_argument("--ingest", action="append", default=[], metavar="FILE[:FORMAT]",
+                     help="read metrics from a harness output file after the run. Repeatable.")
+    run.add_argument("--pack", action="append", default=[], metavar="NAME",
+                     help="force an ecosystem pack on (hpc, cuda, python, rust, jvm, go, node). Repeatable.")
     run.add_argument("--repeats", type=int, default=1, metavar="N",
                      help="run the command N times, one record each (default 1)")
     run.add_argument("--no-store", action="store_true", help="do not record to the store")
@@ -152,7 +159,7 @@ def _parse_waivers(items: list[str]) -> dict[str, str]:
 def _cmd_capture(args) -> int:
     from .capture import capture
 
-    cfg = Config.load(args.config)
+    cfg = Config.load(args.config, packs=args.pack, tree=args.repo)
     fingerprint = capture(
         repo=args.repo,
         cmake_cache=args.cmake_cache,
@@ -234,7 +241,7 @@ def _cmd_run(args) -> int:
             "nothing to run. Put the benchmark command after --, "
             "e.g. ceteris run --label a -- mpirun -n 2 ./bench"
         )
-    cfg = Config.load(args.config)
+    cfg = Config.load(args.config, packs=args.pack, tree=args.repo)
     records = run_repeated(
         command,
         args.repeats,
@@ -247,6 +254,8 @@ def _cmd_run(args) -> int:
         build_type=args.build_type,
         metric_patterns=parse_cli_metrics(args.metric),
         echo=not args.quiet,
+        adapter=args.adapter,
+        ingest=args.ingest,
     )
     worst = 0
     for record in records:

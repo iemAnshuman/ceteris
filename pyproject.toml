@@ -47,7 +47,7 @@ ceteris = "ceteris.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ceteris = ["defaults.toml"]
+ceteris = ["defaults.toml", "packs/*.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

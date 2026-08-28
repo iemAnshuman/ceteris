@@ -172,6 +172,15 @@ def render(report: Report) -> str:
     out.extend(_results_table(report))
     out.extend(_noise_section(report))
 
+    if report.failed_runs:
+        out.append("THE BENCHMARK FAILED (nothing here can be certified):")
+        for f in report.failed_runs:
+            out.append(f"  {f.label:<20} exit {f.run.get('exit_code')}")
+            tail = [ln for ln in str(f.run.get("output", "")).splitlines() if ln.strip()][-2:]
+            for line in tail:
+                out.append(f"      {_clip(line, 70)}")
+        out.append("")
+
     if report.drifted:
         out.append("ENVIRONMENT CHANGED DURING THE RUN (not certifiable):")
         for fingerprint in report.drifted:
@@ -261,6 +270,9 @@ def to_json(report: Report) -> dict[str, Any]:
         "exit_code": report.exit_code,
         "matched": report.matched_count,
         "warnings": report.warnings,
+        "failed_runs": [
+            {"run": f.label, "exit_code": f.run.get("exit_code")} for f in report.failed_runs
+        ],
         "confounds": [
             {"undeclared": c.undeclared, "declared": c.declared,
              "table": [{"declared_value": a, "undeclared_value": b, "runs": n} for a, b, n in c.table]}

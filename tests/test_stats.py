@@ -8,6 +8,7 @@ from ceteris import stats
 from ceteris.cli import main
 from ceteris.compare import EXIT_OK, EXIT_WITHIN_NOISE, compare
 from ceteris.model import Fingerprint, unknown, value
+from ceteris.render import render
 from ceteris.runner import run_repeated
 
 
@@ -88,3 +89,40 @@ def test_cli_repeats_and_require_signal(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert code == EXIT_WITHIN_NOISE
     assert "NOT A RESULT" in out and "same x3" in out
+
+
+def test_runs_whose_command_failed_are_never_certified(cfg):
+    """Found on Rostam: three runs of an mpirun that exited 183 compared as
+    agreeing and were reported valid. A benchmark that crashed produced no
+    measurement, and the exit code lives outside the comparable body."""
+    from ceteris.compare import EXIT_INDETERMINATE
+    from ceteris.model import Fingerprint, unknown, value
+
+    def crashed(label):
+        return Fingerprint({"source.commit": value("x")}, {"label": label},
+                           run={"exit_code": 183, "output": "mpirun: launch failed\n"},
+                           metrics={"bw": unknown("pattern did not match")})
+
+    runs = [crashed("a"), crashed("b"), crashed("c")]
+    report = compare(runs, cfg=cfg)
+    assert [f.label for f in report.failed_runs] == ["a", "b", "c"]
+    assert report.exit_code == EXIT_INDETERMINATE
+    assert "THE BENCHMARK FAILED" in render(report)
+
+
+def test_a_metric_no_run_produced_says_so(cfg):
+    from ceteris.model import Fingerprint, unknown, value
+
+    runs = [Fingerprint({"source.commit": value("x")}, {"label": f"r{i}"},
+                        run={"exit_code": 0}, metrics={"bw": unknown("no match")}) for i in range(3)]
+    verdict = compare(runs, cfg=cfg).noise[0]
+    assert "no configuration produced a value" in verdict.reason
+
+
+def test_a_successful_run_is_unaffected(cfg):
+    from ceteris.model import Fingerprint, value
+
+    runs = [Fingerprint({"source.commit": value("x")}, {"label": f"r{i}"},
+                        run={"exit_code": 0}, metrics={"bw": value(1.0 + i * 0.01)}) for i in range(3)]
+    report = compare(runs, cfg=cfg)
+    assert not report.failed_runs and report.exit_code == EXIT_OK

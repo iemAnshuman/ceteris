@@ -110,6 +110,12 @@ def stats_for(group: ConfigGroup, metric: str) -> MetricStats | None:
 
 def noise_verdict(groups: Sequence[ConfigGroup], metric: str) -> NoiseVerdict:
     per = [s for s in (stats_for(g, metric) for g in groups) if s is not None]
+    if not per:
+        # Every sample was unknown: the pattern did not match, or the harness
+        # produced nothing. Saying "fewer than two configurations" here hid
+        # the fact that the number was never extracted at all.
+        return NoiseVerdict(metric, None, None, False, False,
+                            "no configuration produced a value for this metric")
     if len(per) < 2:
         return NoiseVerdict(metric, None, None, False, False, "fewer than two configurations carry this metric")
     thin = [s.label for s in per if s.n < MIN_REPEATS]

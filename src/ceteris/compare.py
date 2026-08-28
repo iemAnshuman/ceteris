@@ -156,13 +156,29 @@ class Report:
             return EXIT_UNDECLARED
         if self.indeterminates:
             return EXIT_INDETERMINATE
-        if self.drifted:
+        if self.failed_runs or self.drifted:
             return EXIT_INDETERMINATE
         if self.strict and (self.constant_declarations or self.unmatched_declarations):
             return EXIT_UNDECLARED
         if self.require_signal and self.noise and not any(v.assessed and not v.within_noise for v in self.noise):
             return EXIT_WITHIN_NOISE
         return EXIT_OK
+
+    @property
+    def failed_runs(self) -> list[Fingerprint]:
+        """Runs whose wrapped command exited non-zero.
+
+        A benchmark that crashed produced no measurement, so nothing about it
+        can be certified. The exit code lives outside the comparable body, so
+        without this check a set of runs that all failed identically compared
+        as agreeing and was reported valid.
+        """
+        out = []
+        for f in self.sources:
+            code = f.run.get("exit_code")
+            if isinstance(code, int) and code != 0:
+                out.append(f)
+        return out
 
     @property
     def drifted(self) -> list[Fingerprint]:

@@ -41,6 +41,7 @@ cmake_keys = [
 
 "parallelism.*" = "material"
 
+"hardware.gpu_vendor" = "critical"
 "hardware.hostnames" = "informational"
 "hardware.node_count" = "material"
 "hardware.os_version" = "material"

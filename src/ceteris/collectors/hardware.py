@@ -78,39 +78,103 @@ def _cpu_linux(out: dict[str, Field]) -> None:
     )
 
 
-def _gpu(out: dict[str, Field]) -> None:
-    res = run(
-        [
-            "nvidia-smi",
-            "--query-gpu=name,driver_version",
-            "--format=csv,noheader",
-        ],
-        timeout=10,
-    )
+# Signals that a compute GPU driver stack is loaded, used when no vendor query
+# tool is on PATH. Deliberately narrow: /sys/class/drm/card* exists on any box
+# with integrated graphics and would make ordinary login nodes uncertifiable.
+_GPU_DRIVER_SIGNALS = (
+    ("/dev/kfd", "AMD compute device /dev/kfd"),
+    ("/proc/driver/nvidia/version", "NVIDIA kernel driver"),
+    ("/sys/module/amdgpu", "amdgpu kernel module"),
+    ("/sys/module/nvidia", "nvidia kernel module"),
+)
+
+_GPU_FIELDS = ("gpu_vendor", "gpu_models", "gpu_count", "gpu_driver")
+
+
+def _gpu_driver_evidence() -> list[str]:
+    return [why for path, why in _GPU_DRIVER_SIGNALS if os.path.exists(path)]
+
+
+def _nvidia(out: dict[str, Field]) -> bool:
+    """True when nvidia-smi answered, either with data or with a real failure."""
+    res = run(["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"], timeout=10)
     if res.missing:
-        for key in ("gpu_models", "gpu_count", "gpu_driver"):
-            out[f"hardware.{key}"] = not_applicable(res.detail, provenance="nvidia-smi")
-    elif not res.ok:
-        for key in ("gpu_models", "gpu_count", "gpu_driver"):
+        return False
+    if not res.ok:
+        for key in _GPU_FIELDS:
             out[f"hardware.{key}"] = unknown(res.detail, provenance=res.provenance)
-    else:
-        rows = [r.strip() for r in res.stdout.splitlines() if r.strip()]
-        models, drivers = [], set()
-        for row in rows:
-            parts = [p.strip() for p in row.split(",")]
-            models.append(parts[0])
-            if len(parts) > 1:
-                drivers.add(parts[1])
+        return True
+    rows = [r.strip() for r in res.stdout.splitlines() if r.strip()]
+    models, drivers = [], set()
+    for row in rows:
+        parts = [p.strip() for p in row.split(",")]
+        models.append(parts[0])
+        if len(parts) > 1:
+            drivers.add(parts[1])
+    out["hardware.gpu_vendor"] = value("nvidia", provenance=res.provenance)
+    out["hardware.gpu_models"] = value(sorted(models), provenance=res.provenance)
+    out["hardware.gpu_count"] = value(len(models), provenance=res.provenance)
+    out["hardware.gpu_driver"] = (
+        value(sorted(drivers)[0], provenance=res.provenance)
+        if len(drivers) == 1
+        else unknown(f"GPUs report differing driver versions: {sorted(drivers)}", provenance=res.provenance)
+    )
+    return True
+
+
+def _amd(out: dict[str, Field]) -> bool:
+    """ROCm. The CSV shape is taken from rocm-smi's documentation, not from a
+    machine I have; anything unparseable is unknown, never a guess."""
+    res = run(["rocm-smi", "--showproductname", "--showdriverversion", "--csv"], timeout=10)
+    if res.missing:
+        return False
+    if not res.ok:
+        for key in _GPU_FIELDS:
+            out[f"hardware.{key}"] = unknown(res.detail, provenance=res.provenance)
+        return True
+    models, driver = [], None
+    for line in res.stdout.splitlines():
+        cells = [c.strip() for c in line.split(",")]
+        if not cells or not cells[0]:
+            continue
+        if cells[0].lower().startswith("card") and len(cells) > 1 and not cells[1].lower().startswith("card"):
+            models.append(cells[1])
+        if cells[0].lower().replace(" ", "") in ("driverversion", "driver_version") and len(cells) > 1:
+            driver = cells[1]
+    out["hardware.gpu_vendor"] = value("amd", provenance=res.provenance)
+    if models:
         out["hardware.gpu_models"] = value(sorted(models), provenance=res.provenance)
         out["hardware.gpu_count"] = value(len(models), provenance=res.provenance)
-        out["hardware.gpu_driver"] = (
-            value(sorted(drivers)[0], provenance=res.provenance)
-            if len(drivers) == 1
-            else unknown(
-                f"GPUs report differing driver versions: {sorted(drivers)}",
-                provenance=res.provenance,
-            )
-        )
+    else:
+        for key in ("gpu_models", "gpu_count"):
+            out[f"hardware.{key}"] = unknown("could not parse rocm-smi --csv output", provenance=res.provenance)
+    out["hardware.gpu_driver"] = (
+        value(driver, provenance=res.provenance) if driver
+        else unknown("no driver version row in rocm-smi --csv output", provenance=res.provenance)
+    )
+    return True
+
+
+def _gpu(out: dict[str, Field]) -> None:
+    """A missing vendor tool proves the absence of that vendor's stack, not the
+    absence of a GPU. Before concluding there is no accelerator, look for a
+    loaded driver: an AMD box has no nvidia-smi, and reporting not_applicable
+    there would let two different AMD machines compare as agreeing about their
+    GPUs."""
+    if not (_nvidia(out) or _amd(out)):
+        evidence = _gpu_driver_evidence()
+        if evidence:
+            for key in _GPU_FIELDS:
+                out[f"hardware.{key}"] = unknown(
+                    "a GPU driver is loaded (" + "; ".join(evidence) + ") but neither "
+                    "nvidia-smi nor rocm-smi is on PATH",
+                    provenance="/dev/kfd, /proc/driver/nvidia, /sys/module/*",
+                )
+        else:
+            for key in _GPU_FIELDS:
+                out[f"hardware.{key}"] = not_applicable(
+                    "no GPU query tool and no loaded GPU driver", provenance="nvidia-smi, rocm-smi"
+                )
 
     nvcc = run(["nvcc", "--version"])
     if nvcc.missing:
@@ -121,8 +185,7 @@ def _gpu(out: dict[str, Field]) -> None:
         match = re.search(r"release\s+([0-9.]+)", nvcc.stdout)
         out["hardware.cuda_runtime"] = (
             value(match.group(1), provenance=nvcc.provenance)
-            if match
-            else unknown("could not parse nvcc --version", provenance=nvcc.provenance)
+            if match else unknown("could not parse nvcc --version", provenance=nvcc.provenance)
         )
 
 

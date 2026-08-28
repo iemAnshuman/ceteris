@@ -51,12 +51,73 @@ def succeeding(stdout):
 
 
 def test_absent_gpu_is_not_applicable_not_unknown(monkeypatch, ctx):
-    """No nvidia-smi means no GPU, which is a fact, not a gap. If this were
-    UNKNOWN, every laptop-to-laptop comparison would be uncertifiable."""
+    """No query tool AND no loaded driver means no GPU, which is a fact, not a
+    gap. If this were UNKNOWN, every laptop-to-laptop comparison would be
+    uncertifiable."""
     monkeypatch.setattr(hw_col, "run", missing)
+    monkeypatch.setattr(hw_col, "_gpu_driver_evidence", lambda: [])
     out = hw_col.collect(ctx)
     for key in ("gpu_models", "gpu_count", "gpu_driver", "cuda_runtime"):
         assert out[f"hardware.{key}"].state is State.NOT_APPLICABLE
+
+
+def test_a_loaded_gpu_driver_without_a_query_tool_is_unknown(monkeypatch, ctx):
+    """An AMD box with no rocm-smi installed still has GPUs. Reporting
+    not_applicable would let two different AMD machines compare as agreeing
+    about their accelerators, which is a silent false certification."""
+    monkeypatch.setattr(hw_col, "run", missing)
+    monkeypatch.setattr(hw_col, "_gpu_driver_evidence", lambda: ["AMD compute device /dev/kfd"])
+    out = {}
+    hw_col._gpu(out)
+    for key in ("gpu_vendor", "gpu_models", "gpu_count", "gpu_driver"):
+        assert out[f"hardware.{key}"].state is State.UNKNOWN
+        assert "/dev/kfd" in out[f"hardware.{key}"].detail
+
+
+def test_two_amd_machines_do_not_compare_as_agreeing(monkeypatch, ctx, cfg):
+    from ceteris.compare import EXIT_INDETERMINATE, compare
+    from ceteris.model import Fingerprint
+
+    monkeypatch.setattr(hw_col, "run", missing)
+    monkeypatch.setattr(hw_col, "_gpu_driver_evidence", lambda: ["amdgpu kernel module"])
+    a, b = {}, {}
+    hw_col._gpu(a); hw_col._gpu(b)
+    report = compare([Fingerprint(a, {"label": "n1"}), Fingerprint(b, {"label": "n2"})], cfg=cfg)
+    assert report.exit_code == EXIT_INDETERMINATE
+
+
+def test_rocm_is_read_when_nvidia_smi_is_absent(monkeypatch, ctx):
+    """Fixture shape from rocm-smi documentation, not from a machine here."""
+    csv = ("device,Card series,Card model,Card vendor\n"
+           "card0,Instinct MI250X,0x0b0c,Advanced Micro Devices Inc.\n"
+           "card1,Instinct MI250X,0x0b0c,Advanced Micro Devices Inc.\n"
+           "name,value\n"
+           "Driver version,6.0.5\n")
+
+    def only_rocm(argv, **kw):
+        if argv[0] == "rocm-smi":
+            return _run.CmdResult(argv=argv, ok=True, missing=False, stdout=csv)
+        return missing(argv)
+
+    monkeypatch.setattr(hw_col, "run", only_rocm)
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_vendor"].value == "amd"
+    assert out["hardware.gpu_count"].value == 2
+    assert out["hardware.gpu_driver"].value == "6.0.5"
+
+
+def test_unparseable_rocm_output_is_unknown_not_a_guess(monkeypatch, ctx):
+    def only_rocm(argv, **kw):
+        if argv[0] == "rocm-smi":
+            return _run.CmdResult(argv=argv, ok=True, missing=False, stdout="unexpected banner\n")
+        return missing(argv)
+
+    monkeypatch.setattr(hw_col, "run", only_rocm)
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_models"].state is State.UNKNOWN
+    assert out["hardware.gpu_driver"].state is State.UNKNOWN
 
 
 def test_broken_gpu_tool_is_unknown_not_not_applicable(monkeypatch, ctx):

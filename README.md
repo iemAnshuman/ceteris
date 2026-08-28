@@ -580,11 +580,36 @@ harnesses can emit it directly.
 
 ## Status
 
-Alpha. Exercised for real on macOS and Linux in CI, including the hyperfine
-path. The Slurm fan-out, CUDA and multi-node paths are tested against
-recorded and hand-built inputs and have not yet run on a real allocation. If
-you run one, `ceteris capture -o fp.json` inside the job is the most useful
-thing you can send.
+Alpha, but no longer only tested on a laptop. Exercised for real on macOS and
+Linux in CI, and on **LSU's Rostam cluster** on 2026-08-28: login node, a
+single-node V100 allocation, a two-node fan-out, and a heterogeneous
+two-node allocation. Records are committed under
+[`examples/rostam/`](examples/rostam/) with ground truth taken in the same
+jobs.
+
+The heterogeneous case is the one worth looking at, because it is what
+per-node capture exists for:
+
+```
+hardware.cpu_model          [['Intel(R) Xeon(R) CPU E5-2660 v3 @ 2.60GHz', 1], ['Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz', 1]]
+hardware.cpu_cores_logical  [[20, 1], [40, 1]]
+hardware.gpu_models         2 node types: V100-PCIE x2 vs V100-SXM2 x4
+hardware.gpu_driver         580.65.06   (identical on 2 nodes)
+```
+
+Two nodes in one allocation, different CPUs and different GPUs, and the
+fingerprint says so instead of describing the head node and calling it the
+allocation.
+
+Still untested against real hardware: AMD/ROCm GPUs, non-Slurm schedulers
+(PBS, LSF, Flux), ARM CPUs, and the JMH, criterion, OSU, nccl-tests and
+MLPerf output parsers. Those are fixture-tested only. If you run any of them,
+`ceteris capture -o fp.json` and the resulting file is the most useful thing
+you can send.
+
+**Note for cluster users:** ceteris needs Python 3.11 or newer, and many
+clusters still ship 3.9 as the system interpreter. On Rostam,
+`module load python/3.13.2` first.
 
 ```sh
 python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/python -m pytest

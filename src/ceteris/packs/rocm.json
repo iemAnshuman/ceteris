@@ -1,0 +1,48 @@
+{
+  "activate": {
+    "env_any": [
+      "ROCR_VISIBLE_DEVICES",
+      "HIP_VISIBLE_DEVICES"
+    ],
+    "path_tools": [
+      "rocm-smi",
+      "hipcc",
+      "rocminfo"
+    ]
+  },
+  "capture": {
+    "cmake_keys": [
+      "CMAKE_HIP_ARCHITECTURES",
+      "CMAKE_HIP_FLAGS",
+      "AMDGPU_TARGETS",
+      "GPU_TARGETS"
+    ],
+    "env_allowlist": [
+      "ROCR_VISIBLE_DEVICES",
+      "HIP_VISIBLE_DEVICES",
+      "GPU_DEVICE_ORDINAL",
+      "HSA_OVERRIDE_GFX_VERSION",
+      "HSA_ENABLE_SDMA",
+      "HSA_FORCE_FINE_GRAIN_PCIE",
+      "HSA_XNACK",
+      "HIP_LAUNCH_BLOCKING",
+      "HIP_FORCE_DEV_KERNARG",
+      "AMD_SERIALIZE_KERNEL",
+      "AMD_LOG_LEVEL",
+      "GPU_MAX_HW_QUEUES",
+      "RCCL_DEBUG",
+      "NCCL_DEBUG",
+      "RCCL_MSCCL_ENABLE",
+      "NCCL_MIN_NCHANNELS",
+      "MIOPEN_FIND_MODE",
+      "MIOPEN_USER_DB_PATH",
+      "PYTORCH_ROCM_ARCH"
+    ]
+  },
+  "toolchain": {
+    "hipcc": [
+      "hipcc",
+      "--version"
+    ]
+  }
+}

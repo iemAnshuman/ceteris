@@ -12,7 +12,7 @@ from ceteris.model import State
 
 def test_every_pack_file_parses():
     p = packs.available()
-    assert {"hpc", "cuda", "python", "rust", "jvm", "go", "node"} <= set(p)
+    assert {"hpc", "cuda", "rocm", "python", "rust", "jvm", "go", "node"} <= set(p)
 
 
 def test_rust_pack_activates_on_cargo_toml(tmp_path, monkeypatch):
@@ -60,3 +60,14 @@ def test_toolchain_version_is_read_for_the_active_pack(tmp_path, monkeypatch):
     out = deps.collect(Context(cfg=cfg, repo=str(tmp_path)))
     assert out["toolchain.python"].state is State.VALUE
     assert out["packs.active"].value == ["python"]
+
+
+def test_rocm_pack_activates_on_an_amd_machine(tmp_path, monkeypatch):
+    """Rostam's kamand1 has rocm-smi and no nvidia-smi; AMD has its own tuning
+    surface (HSA_*, HIP_*, RCCL_*) that the cuda pack does not cover."""
+    monkeypatch.setattr(packs, "_which", lambda t: "/usr/bin/rocm-smi" if t == "rocm-smi" else None)
+    chosen = packs.select(str(tmp_path))
+    assert "rocm" in chosen and "cuda" not in chosen
+    cfg = Config.load(tree=str(tmp_path))
+    assert "HSA_OVERRIDE_GFX_VERSION" in cfg.env_allowlist
+    assert "RCCL_DEBUG" in cfg.env_allowlist

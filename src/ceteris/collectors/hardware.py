@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import glob
+import json
 import os
 import platform
 import re
@@ -135,36 +136,69 @@ def _nvidia(out: dict[str, Field]) -> bool:
     return True
 
 
+def _rocm_json(argv: list[str]):
+    """rocm-smi --json for one query. Returns (parsed, CmdResult).
+
+    Each query is issued on its own: asking for two things at once
+    (--showproductname --showdriverversion) makes rocm-smi emit only the last
+    table, which silently dropped every card row. Verified against ROCm-SMI
+    3.0.0 on an MI100 node.
+    """
+    res = run([*argv, "--json"], timeout=15)
+    if not res.ok:
+        return None, res
+    try:
+        return json.loads(res.stdout), res
+    except ValueError:
+        return None, res
+
+
 def _amd(out: dict[str, Field]) -> bool:
-    """ROCm. The CSV shape is taken from rocm-smi's documentation, not from a
-    machine I have; anything unparseable is unknown, never a guess."""
-    res = run(["rocm-smi", "--showproductname", "--showdriverversion", "--csv"], timeout=10)
+    """True when rocm-smi answered, either with data or with a real failure."""
+    products, res = _rocm_json(["rocm-smi", "--showproductname"])
     if res.missing:
         return False
     if not res.ok:
         for key in _GPU_FIELDS:
             out[f"hardware.{key}"] = unknown(res.detail, provenance=res.provenance)
         return True
-    models, driver = [], None
-    for line in res.stdout.splitlines():
-        cells = [c.strip() for c in line.split(",")]
-        if not cells or not cells[0]:
-            continue
-        if cells[0].lower().startswith("card") and len(cells) > 1 and not cells[1].lower().startswith("card"):
-            models.append(cells[1])
-        if cells[0].lower().replace(" ", "") in ("driverversion", "driver_version") and len(cells) > 1:
-            driver = cells[1]
+
     out["hardware.gpu_vendor"] = value("amd", provenance=res.provenance)
+    models = []
+    if isinstance(products, dict):
+        for card in sorted(products):
+            entry = products[card]
+            if isinstance(entry, dict):
+                name = entry.get("Card Series") or entry.get("Card Model") or entry.get("Device Name")
+                if name:
+                    models.append(str(name))
     if models:
         out["hardware.gpu_models"] = value(sorted(models), provenance=res.provenance)
         out["hardware.gpu_count"] = value(len(models), provenance=res.provenance)
     else:
         for key in ("gpu_models", "gpu_count"):
-            out[f"hardware.{key}"] = unknown("could not parse rocm-smi --csv output", provenance=res.provenance)
-    out["hardware.gpu_driver"] = (
-        value(driver, provenance=res.provenance) if driver
-        else unknown("no driver version row in rocm-smi --csv output", provenance=res.provenance)
-    )
+            out[f"hardware.{key}"] = unknown(
+                "no card entries in rocm-smi --showproductname --json", provenance=res.provenance
+            )
+
+    driver, dres = _rocm_json(["rocm-smi", "--showdriverversion"])
+    versions = set()
+    if isinstance(driver, dict):
+        for entry in driver.values():
+            if isinstance(entry, dict):
+                for key, val in entry.items():
+                    if "driver" in key.lower() and "version" in key.lower():
+                        versions.add(str(val))
+    if len(versions) == 1:
+        out["hardware.gpu_driver"] = value(versions.pop(), provenance=dres.provenance)
+    elif versions:
+        out["hardware.gpu_driver"] = unknown(
+            f"GPUs report differing driver versions: {sorted(versions)}", provenance=dres.provenance
+        )
+    else:
+        out["hardware.gpu_driver"] = unknown(
+            "no driver version in rocm-smi --showdriverversion --json", provenance=dres.provenance
+        )
     return True
 
 

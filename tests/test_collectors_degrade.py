@@ -86,40 +86,6 @@ def test_two_amd_machines_do_not_compare_as_agreeing(monkeypatch, ctx, cfg):
     assert report.exit_code == EXIT_INDETERMINATE
 
 
-def test_rocm_is_read_when_nvidia_smi_is_absent(monkeypatch, ctx):
-    """Fixture shape from rocm-smi documentation, not from a machine here."""
-    csv = ("device,Card series,Card model,Card vendor\n"
-           "card0,Instinct MI250X,0x0b0c,Advanced Micro Devices Inc.\n"
-           "card1,Instinct MI250X,0x0b0c,Advanced Micro Devices Inc.\n"
-           "name,value\n"
-           "Driver version,6.0.5\n")
-
-    def only_rocm(argv, **kw):
-        if argv[0] == "rocm-smi":
-            return _run.CmdResult(argv=argv, ok=True, missing=False, stdout=csv)
-        return missing(argv)
-
-    monkeypatch.setattr(hw_col, "run", only_rocm)
-    out = {}
-    hw_col._gpu(out)
-    assert out["hardware.gpu_vendor"].value == "amd"
-    assert out["hardware.gpu_count"].value == 2
-    assert out["hardware.gpu_driver"].value == "6.0.5"
-
-
-def test_unparseable_rocm_output_is_unknown_not_a_guess(monkeypatch, ctx):
-    def only_rocm(argv, **kw):
-        if argv[0] == "rocm-smi":
-            return _run.CmdResult(argv=argv, ok=True, missing=False, stdout="unexpected banner\n")
-        return missing(argv)
-
-    monkeypatch.setattr(hw_col, "run", only_rocm)
-    out = {}
-    hw_col._gpu(out)
-    assert out["hardware.gpu_models"].state is State.UNKNOWN
-    assert out["hardware.gpu_driver"].state is State.UNKNOWN
-
-
 def test_broken_gpu_tool_is_unknown_not_not_applicable(monkeypatch, ctx):
     """nvidia-smi present but hanging means we do not know. Fail closed."""
     monkeypatch.setattr(hw_col, "run", failing("timed out after 10.0s", timed_out=True))
@@ -447,3 +413,43 @@ def test_a_hung_nvidia_smi_stays_unknown_even_without_a_driver(monkeypatch, ctx)
     out = {}
     hw_col._gpu(out)
     assert out["hardware.gpu_models"].state is State.UNKNOWN
+
+
+def test_rocm_json_is_parsed_from_real_mi100_output(monkeypatch, ctx):
+    """Recorded from ROCm-SMI 3.0.0 on Rostam's kamand1 (2x Instinct MI100).
+
+    The first version of this collector asked for the product name and the
+    driver version in one call; rocm-smi answers such a request with only the
+    last table, so every card row vanished. Each query is separate now.
+    """
+    products = ('{"card0": {"Card Series": "AMD Instinct MI100", "Card Model": "0x738c", '
+                '"GFX Version": "gfx908"}, "card1": {"Card Series": "AMD Instinct MI100", '
+                '"Card Model": "0x738c", "GFX Version": "gfx908"}}')
+    driver = '{"system": {"Driver version": "6.12.12"}}'
+
+    def rocm(argv, **kw):
+        if argv[0] != "rocm-smi":
+            return missing(argv)
+        payload = driver if "--showdriverversion" in argv else products
+        return _run.CmdResult(argv=argv, ok=True, missing=False, stdout=payload)
+
+    monkeypatch.setattr(hw_col, "run", rocm)
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_vendor"].value == "amd"
+    assert out["hardware.gpu_count"].value == 2
+    assert out["hardware.gpu_models"].value == ["AMD Instinct MI100", "AMD Instinct MI100"]
+    assert out["hardware.gpu_driver"].value == "6.12.12"
+
+
+def test_rocm_without_card_entries_is_unknown_not_a_guess(monkeypatch, ctx):
+    def rocm(argv, **kw):
+        if argv[0] != "rocm-smi":
+            return missing(argv)
+        return _run.CmdResult(argv=argv, ok=True, missing=False, stdout='{"system": {"Driver version": "6.12.12"}}')
+
+    monkeypatch.setattr(hw_col, "run", rocm)
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_models"].state is State.UNKNOWN
+    assert out["hardware.gpu_driver"].value == "6.12.12"

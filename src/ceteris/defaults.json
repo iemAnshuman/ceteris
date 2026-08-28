@@ -39,6 +39,8 @@
   "severity": {
     "build.*": "critical",
     "deps.*": "critical",
+    "deps.container_image_sha256": "critical",
+    "deps.container_runtime": "critical",
     "execution.command": "informational",
     "execution.launcher": "critical",
     "execution.launcher_args": "critical",

@@ -63,7 +63,75 @@ def collect(ctx) -> dict[str, Field]:
             except OSError as exc:
                 out[key] = unknown(str(exc), provenance=path)
 
-    image = os.environ.get("CONTAINER_IMAGE") or os.environ.get("SINGULARITY_CONTAINER") or os.environ.get("APPTAINER_CONTAINER")
-    out["deps.container_image"] = value(image, provenance="$CONTAINER_IMAGE / $APPTAINER_CONTAINER") if image else not_applicable(
-        "no container image variable set", provenance="$CONTAINER_IMAGE")
+    out.update(_container())
+    return out
+
+
+# Files that exist only inside a container runtime. Apptainer/Singularity is
+# how most HPC sites ship software, so "which image" is as load-bearing as
+# "which commit".
+_RUNTIME_MARKERS = (
+    ("/.singularity.d", "apptainer/singularity"),
+    ("/singularity", "singularity"),
+    ("/.dockerenv", "docker"),
+    ("/run/.containerenv", "podman"),
+)
+
+_IMAGE_VARS = (
+    "APPTAINER_CONTAINER", "SINGULARITY_CONTAINER", "APPTAINER_NAME",
+    "SINGULARITY_NAME", "CONTAINER_IMAGE", "SLURM_CONTAINER", "CHARLIECLOUD_IMAGE",
+)
+
+
+def _container() -> dict[str, Field]:
+    """Container identity.
+
+    Reading only an environment variable meant that two runs inside completely
+    different images recorded not_applicable and compared as equal, which is a
+    silent false certification: a different image is a different compiler, a
+    different MPI and a different set of libraries.
+
+    Inside a container with no identifying variable, the runtime is recorded
+    and the image is unknown -- not absent.
+    """
+    out: dict[str, Field] = {}
+    runtime = next((name for path, name in _RUNTIME_MARKERS if os.path.exists(path)), None)
+    image, var = None, None
+    for name in _IMAGE_VARS:
+        if os.environ.get(name):
+            image, var = os.environ[name], name
+            break
+
+    if runtime is None and image is None:
+        out["deps.container_runtime"] = not_applicable(
+            "not running inside a container", provenance="/.singularity.d, /.dockerenv, /run/.containerenv"
+        )
+        out["deps.container_image"] = not_applicable(
+            "not running inside a container", provenance="container image variables"
+        )
+        return out
+
+    out["deps.container_runtime"] = value(
+        runtime or "unknown runtime", provenance=f"${var}" if runtime is None else "runtime marker file"
+    )
+    if image is None:
+        out["deps.container_image"] = unknown(
+            f"inside a {runtime} container but no image variable is set "
+            f"(looked for {', '.join('$' + v for v in _IMAGE_VARS[:4])})",
+            provenance="container image variables",
+        )
+        return out
+
+    out["deps.container_image"] = value(image, provenance=f"${var}")
+    # The variable often names a path to the image file. Hash it when it is
+    # readable: two sites can use the same name for different builds.
+    if os.path.isfile(image):
+        try:
+            out["deps.container_image_sha256"] = value(_sha256(image), provenance=f"sha256 {image}")
+        except OSError as exc:
+            out["deps.container_image_sha256"] = unknown(str(exc), provenance=f"sha256 {image}")
+    else:
+        out["deps.container_image_sha256"] = not_applicable(
+            "image is not a readable file from inside the container", provenance=f"${var}"
+        )
     return out

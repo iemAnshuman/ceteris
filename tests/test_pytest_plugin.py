@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import shutil
 
@@ -11,6 +12,10 @@ pytest_plugins = ["pytester"]
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+@pytest.mark.skipif(
+    importlib.util.find_spec("pytest_benchmark") is None,
+    reason="needs pytest-benchmark (in the dev extra)",
+)
 def test_session_is_recorded_with_benchmark_metrics(pytester, monkeypatch):
     store = pytester.path / "runs"
     monkeypatch.setenv("CETERIS_STORE", str(store))

@@ -1,0 +1,29 @@
+{
+  "activate": {
+    "tree_markers": [
+      "package.json"
+    ]
+  },
+  "capture": {
+    "env_allowlist": [
+      "NODE_OPTIONS",
+      "NODE_ENV",
+      "UV_THREADPOOL_SIZE"
+    ]
+  },
+  "lockfiles": {
+    "files": [
+      "package-lock.json",
+      "yarn.lock",
+      "pnpm-lock.yaml",
+      "bun.lockb",
+      ".nvmrc"
+    ]
+  },
+  "toolchain": {
+    "node": [
+      "node",
+      "--version"
+    ]
+  }
+}

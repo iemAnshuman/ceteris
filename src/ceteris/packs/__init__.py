@@ -5,27 +5,22 @@ gets LCI and UCX without dragging those into a Node project."""
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from pathlib import Path
 from typing import Any
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover
-    tomllib = None  # type: ignore[assignment]
 
 PACK_DIR = Path(__file__).parent
 _which = shutil.which  # patched in tests
 
 
 def available() -> dict[str, dict[str, Any]]:
-    packs = {}
-    for path in sorted(PACK_DIR.glob("*.toml")):
-        if tomllib is None:  # pragma: no cover
-            break
-        packs[path.stem] = tomllib.loads(path.read_text(encoding="utf-8"))
-    return packs
+    """Packs are JSON so that no interpreter is excluded from loading them."""
+    return {
+        path.stem: json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(PACK_DIR.glob("*.json"))
+    }
 
 
 def activates(pack: dict[str, Any], tree: str) -> str | None:

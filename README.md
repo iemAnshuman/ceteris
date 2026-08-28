@@ -22,7 +22,7 @@ Named for *ceteris paribus*: all other things being equal.
 pipx install git+https://github.com/iemAnshuman/ceteris.git
 ```
 
-Python 3.11+. No runtime dependencies.
+Python 3.9+. No runtime dependencies.
 
 ## Quickstart
 
@@ -607,9 +607,9 @@ MLPerf output parsers. Those are fixture-tested only. If you run any of them,
 `ceteris capture -o fp.json` and the resulting file is the most useful thing
 you can send.
 
-**Note for cluster users:** ceteris needs Python 3.11 or newer, and many
-clusters still ship 3.9 as the system interpreter. On Rostam,
-`module load python/3.13.2` first.
+Runs on the Python a cluster actually has: 3.9 and newer. The shipped
+defaults and packs are JSON so nothing beyond the standard library is needed
+to start; a *user* config may be TOML, which needs 3.11.
 
 ```sh
 python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/python -m pytest

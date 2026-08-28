@@ -1,0 +1,34 @@
+{
+  "activate": {
+    "tree_markers": [
+      "Cargo.toml"
+    ]
+  },
+  "capture": {
+    "env_allowlist": [
+      "RUSTFLAGS",
+      "CARGO_BUILD_TARGET",
+      "CARGO_PROFILE_RELEASE_LTO",
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS",
+      "CARGO_INCREMENTAL",
+      "RUST_MIN_STACK"
+    ]
+  },
+  "lockfiles": {
+    "files": [
+      "Cargo.lock",
+      "rust-toolchain.toml",
+      "rust-toolchain"
+    ]
+  },
+  "toolchain": {
+    "cargo": [
+      "cargo",
+      "--version"
+    ],
+    "rustc": [
+      "rustc",
+      "--version"
+    ]
+  }
+}

@@ -1,14 +1,17 @@
 """Configuration: shipped defaults plus an optional user file.
 
-TOML is read with the stdlib tomllib (3.11+). JSON is also accepted so a
-cluster stuck on an older interpreter can still configure the tool without the
-package taking a third-party parser as a dependency.
+The shipped defaults and packs are JSON, not TOML, so that starting the tool
+needs nothing beyond the standard library on any supported interpreter. Many
+clusters still ship Python 3.9 as the system interpreter -- Rostam does -- and
+tomllib only arrived in 3.11. A user config may be either TOML or JSON; TOML
+requires 3.11 and says so if it cannot be read.
 """
 
 from __future__ import annotations
 
 import fnmatch
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -18,7 +21,7 @@ try:  # pragma: no cover - exercised by whichever interpreter runs the tests
 except ModuleNotFoundError:  # pragma: no cover
     tomllib = None  # type: ignore[assignment]
 
-DEFAULTS_PATH = Path(__file__).with_name("defaults.toml")
+DEFAULTS_PATH = Path(__file__).with_name("defaults.json")
 
 SEVERITIES = ("critical", "material", "informational")
 DEFAULT_SEVERITY = "material"
@@ -32,7 +35,8 @@ def _load_file(path: Path) -> dict[str, Any]:
     if tomllib is None:
         raise RuntimeError(
             f"cannot read {path}: this interpreter has no tomllib "
-            "(Python < 3.11). Supply the config as .json instead."
+            f"(needs Python 3.11+, running {sys.version_info.major}."
+            f"{sys.version_info.minor}). Write the config as JSON instead."
         )
     return tomllib.loads(text)
 
@@ -59,7 +63,7 @@ class Config:
         without every command repeating --config.
         """
         if user_path is None:
-            for candidate in ("ceteris.toml", "ceteris.json"):
+            for candidate in ("ceteris.json", "ceteris.toml"):
                 if Path(candidate).is_file():
                     user_path = candidate
                     break

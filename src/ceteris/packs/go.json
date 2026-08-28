@@ -1,0 +1,31 @@
+{
+  "activate": {
+    "tree_markers": [
+      "go.mod"
+    ]
+  },
+  "capture": {
+    "env_allowlist": [
+      "GOMAXPROCS",
+      "GOGC",
+      "GOMEMLIMIT",
+      "GOFLAGS",
+      "GOAMD64",
+      "GOARM",
+      "GOEXPERIMENT",
+      "CGO_ENABLED"
+    ]
+  },
+  "lockfiles": {
+    "files": [
+      "go.sum",
+      "go.mod"
+    ]
+  },
+  "toolchain": {
+    "go": [
+      "go",
+      "version"
+    ]
+  }
+}

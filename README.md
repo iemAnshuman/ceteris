@@ -633,9 +633,11 @@ Two nodes in one allocation, different CPUs and different GPUs, and the
 fingerprint says so instead of describing the head node and calling it the
 allocation.
 
-Still untested against real hardware: AMD/ROCm GPUs, non-Slurm schedulers
-(PBS, LSF, Flux), ARM CPUs, and the JMH, criterion, OSU, nccl-tests and
-MLPerf output parsers. Those are fixture-tested only. If you run any of them,
+It has since also run on an **AMD MI100 node** (`examples/rostam/amd-mi100.json`),
+which is where the ROCm collector was found to be wrong and fixed.
+
+Still untested against real hardware: non-Slurm schedulers (PBS, LSF, Flux),
+ARM CPUs, and the JMH, criterion, OSU, nccl-tests and MLPerf output parsers. Those are fixture-tested only. If you run any of them,
 `ceteris capture -o fp.json` and the resulting file is the most useful thing
 you can send.
 

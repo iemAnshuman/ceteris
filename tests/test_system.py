@@ -90,10 +90,20 @@ def test_absent_sysfs_node_is_not_applicable(linux_fs):
     assert out["system.smt"].state is State.NOT_APPLICABLE
 
 
-def test_container_is_detected_from_cgroup(linux_fs):
+def test_container_is_detected_from_cgroup(linux_fs, monkeypatch):
+    """system.container now defers to the shared detector, so it can never
+    disagree with deps.container_runtime the way it did inside a real
+    Apptainer image on Rostam."""
+    from ceteris.collectors import _container
+
     linux_fs(dict(TUNED, **{"/proc/1/cgroup": "0::/system.slice/docker-abc.scope\n"}))
+    monkeypatch.setattr(_container, "runtime", lambda: "docker")
     out = {}; sys_col._linux(out)
-    assert out["system.container"].value == "yes"
+    assert out["system.container"].value == "docker"
+
+    monkeypatch.setattr(_container, "runtime", lambda: None)
+    out = {}; sys_col._linux(out)
+    assert out["system.container"].value == "no"
 
 
 def test_load_above_cpu_count_is_flagged_in_detail(monkeypatch, cfg):

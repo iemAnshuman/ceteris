@@ -14,6 +14,7 @@ import os
 import re
 
 from ..model import Field, not_applicable, unknown, value
+from . import _container
 from ._run import run
 
 
@@ -61,27 +62,11 @@ def collect(ctx) -> dict[str, Field]:
             except OSError as exc:
                 out[key] = unknown(str(exc), provenance=path)
 
-    out.update(_container())
+    out.update(_container_fields())
     return out
 
 
-# Files that exist only inside a container runtime. Apptainer/Singularity is
-# how most HPC sites ship software, so "which image" is as load-bearing as
-# "which commit".
-_RUNTIME_MARKERS = (
-    ("/.singularity.d", "apptainer/singularity"),
-    ("/singularity", "singularity"),
-    ("/.dockerenv", "docker"),
-    ("/run/.containerenv", "podman"),
-)
-
-_IMAGE_VARS = (
-    "APPTAINER_CONTAINER", "SINGULARITY_CONTAINER", "APPTAINER_NAME",
-    "SINGULARITY_NAME", "CONTAINER_IMAGE", "SLURM_CONTAINER", "CHARLIECLOUD_IMAGE",
-)
-
-
-def _container() -> dict[str, Field]:
+def _container_fields() -> dict[str, Field]:
     """Container identity.
 
     Reading only an environment variable meant that two runs inside completely
@@ -93,12 +78,9 @@ def _container() -> dict[str, Field]:
     and the image is unknown -- not absent.
     """
     out: dict[str, Field] = {}
-    runtime = next((name for path, name in _RUNTIME_MARKERS if os.path.exists(path)), None)
-    image, var = None, None
-    for name in _IMAGE_VARS:
-        if os.environ.get(name):
-            image, var = os.environ[name], name
-            break
+    runtime = _container.runtime()
+    found = _container.image()
+    image, var = found if found else (None, None)
 
     if runtime is None and image is None:
         out["deps.container_runtime"] = not_applicable(
@@ -115,7 +97,7 @@ def _container() -> dict[str, Field]:
     if image is None:
         out["deps.container_image"] = unknown(
             f"inside a {runtime} container but no image variable is set "
-            f"(looked for {', '.join('$' + v for v in _IMAGE_VARS[:4])})",
+            f"(looked for {', '.join('$' + v for v in _container.IMAGE_VARS[:4])})",
             provenance="container image variables",
         )
         return out

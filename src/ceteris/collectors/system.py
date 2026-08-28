@@ -20,6 +20,7 @@ import platform
 import re
 
 from ..model import Field, not_applicable, unknown, value
+from . import _container
 from ._run import run
 
 
@@ -96,13 +97,10 @@ def _linux(out: dict[str, Field]) -> None:
     else:
         out["system.thermal_throttle"] = not_applicable("no thermal class", provenance=base)
 
-    cgroup, _ = _read("/proc/1/cgroup")
-    if os.path.exists("/.dockerenv") or (cgroup and re.search(r"docker|containerd|podman|kubepods", cgroup)):
-        out["system.container"] = value("yes", provenance="/.dockerenv or /proc/1/cgroup")
-    elif cgroup is None:
-        out["system.container"] = unknown("cannot read /proc/1/cgroup", provenance="/proc/1/cgroup")
-    else:
-        out["system.container"] = value("no", provenance="/.dockerenv or /proc/1/cgroup")
+    found = _container.runtime()
+    out["system.container"] = value(
+        found or "no", provenance="container runtime markers, image variables, /proc/1/cgroup"
+    )
 
     product, _ = _read("/sys/class/dmi/id/product_name")
     res = run(["systemd-detect-virt"])
@@ -166,7 +164,7 @@ def _darwin(out: dict[str, Field]) -> None:
         value("in-use" if m and float(m.group(1)) > 0 else "idle", provenance=swap.provenance)
         if swap.ok else unknown(swap.detail, provenance="sysctl vm.swapusage"))
     out["system.mem_available_mb"] = not_applicable("not tracked on darwin in this version", provenance="sysctl")
-    out["system.container"] = value("no", provenance="darwin")
+    out["system.container"] = value(_container.runtime() or "no", provenance="container runtime markers")
 
 
 def collect(ctx) -> dict[str, Field]:

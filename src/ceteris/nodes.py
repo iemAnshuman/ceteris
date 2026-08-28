@@ -39,7 +39,11 @@ from .model import Field, Fingerprint, State, unknown, value
 NODE_MODE_ENV = "CETERIS_NODE_MODE"
 FANOUT_TIMEOUT = 120
 
-NODE_LOCAL_PREFIXES = ("hardware.",)
+# Everything whose value describes the machine it was measured on. system.*
+# belongs here: a Rostam allocation showed that governor, turbo, SMT and
+# transparent hugepages were being taken from the head node alone, so a node
+# left in powersave inside a 16-node job was invisible.
+NODE_LOCAL_PREFIXES = ("hardware.", "system.")
 NODE_LOCAL_FIELDS = {"parallelism.capture_process_affinity"}
 
 

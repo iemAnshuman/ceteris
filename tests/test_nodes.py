@@ -110,3 +110,23 @@ def test_single_host_capture_uses_the_same_schema():
     assert single.fields["hardware.hostnames"].value == ["laptop"]
     assert single.fields["hardware.node_count"].value == 1
     assert "hardware.hostname" not in single.fields
+
+
+def test_system_state_is_merged_per_node():
+    """Found on Rostam: governor, turbo, SMT and hugepages were taken from the
+    head node alone, so a node left in powersave inside a 16-node allocation
+    was invisible."""
+    assert nodes.is_node_local("system.cpu_governor")
+    assert nodes.is_node_local("system.turbo")
+
+    def n(host, governor):
+        return Fingerprint(
+            {"hardware.hostname": value(host), "system.cpu_governor": value(governor)},
+            {"label": host},
+        )
+
+    merged = nodes.merge(n("n1", "performance"),
+                         [("n1", n("n1", "performance")), ("n2", n("n2", "powersave"))], 2)
+    f = merged.fields["system.cpu_governor"]
+    assert f.value == [["performance", 1], ["powersave", 1]]
+    assert "heterogeneous" in f.detail

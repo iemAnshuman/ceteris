@@ -29,6 +29,7 @@ class CmdResult:
     missing: bool
     stdout: str = ""
     detail: str = ""
+    timed_out: bool = False
 
     @property
     def provenance(self) -> str:
@@ -60,6 +61,7 @@ def run(
             ok=False,
             missing=False,
             detail=f"timed out after {timeout}s",
+            timed_out=True,
         )
     except OSError as exc:
         return CmdResult(argv=argv, ok=False, missing=False, detail=str(exc))

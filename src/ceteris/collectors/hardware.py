@@ -101,8 +101,21 @@ def _nvidia(out: dict[str, Field]) -> bool:
     if res.missing:
         return False
     if not res.ok:
-        for key in _GPU_FIELDS:
-            out[f"hardware.{key}"] = unknown(res.detail, provenance=res.provenance)
+        # Clusters ship nvidia-smi in a shared image, so it exists on GPU-less
+        # login nodes and exits non-zero because no driver is loaded. Treating
+        # that as unknown made every login-node comparison uncertifiable. With
+        # no driver loaded either, the honest answer is that there is no GPU.
+        # A hang tells us nothing either way, so it stays unknown. A clean
+        # non-zero exit with no driver loaded is a real answer: no GPU.
+        if not res.timed_out and not _gpu_driver_evidence():
+            for key in _GPU_FIELDS:
+                out[f"hardware.{key}"] = not_applicable(
+                    f"nvidia-smi failed ({res.detail}) and no GPU driver is loaded",
+                    provenance=res.provenance,
+                )
+        else:
+            for key in _GPU_FIELDS:
+                out[f"hardware.{key}"] = unknown(res.detail, provenance=res.provenance)
         return True
     rows = [r.strip() for r in res.stdout.splitlines() if r.strip()]
     models, drivers = [], set()

@@ -33,9 +33,9 @@ def missing(argv, **kw):
     return _run.CmdResult(argv=argv, ok=False, missing=True, detail=f"{argv[0]} not on PATH")
 
 
-def failing(detail="exit 1"):
+def failing(detail="exit 1", timed_out=False):
     def _f(argv, **kw):
-        return _run.CmdResult(argv=argv, ok=False, missing=False, detail=detail)
+        return _run.CmdResult(argv=argv, ok=False, missing=False, detail=detail, timed_out=timed_out)
 
     return _f
 
@@ -122,7 +122,7 @@ def test_unparseable_rocm_output_is_unknown_not_a_guess(monkeypatch, ctx):
 
 def test_broken_gpu_tool_is_unknown_not_not_applicable(monkeypatch, ctx):
     """nvidia-smi present but hanging means we do not know. Fail closed."""
-    monkeypatch.setattr(hw_col, "run", failing("timed out after 10.0s"))
+    monkeypatch.setattr(hw_col, "run", failing("timed out after 10.0s", timed_out=True))
     out = hw_col.collect(ctx)
     assert out["hardware.gpu_driver"].state is State.UNKNOWN
     assert "timed out" in out["hardware.gpu_driver"].detail
@@ -417,3 +417,33 @@ def test_linux_cpu_fields_are_real_values_on_linux(cfg):
     assert out["hardware.cpu_cores_logical"].state is State.VALUE
     assert out["hardware.numa_nodes"].state in (State.VALUE, State.NOT_APPLICABLE)
     assert out["hardware.gpu_models"].state is State.NOT_APPLICABLE
+
+
+def test_failing_nvidia_smi_without_a_driver_means_no_gpu(monkeypatch, ctx):
+    """Found on the Rostam login node: clusters ship nvidia-smi in a shared
+    image, so it exists on GPU-less nodes and exits 9. Reporting unknown made
+    every login-node comparison uncertifiable."""
+    monkeypatch.setattr(hw_col, "run", failing("exit 9"))
+    monkeypatch.setattr(hw_col, "_gpu_driver_evidence", lambda: [])
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_models"].state is State.NOT_APPLICABLE
+    assert "no GPU driver is loaded" in out["hardware.gpu_models"].detail
+
+
+def test_failing_nvidia_smi_with_a_driver_loaded_is_still_unknown(monkeypatch, ctx):
+    monkeypatch.setattr(hw_col, "run", failing("exit 9"))
+    monkeypatch.setattr(hw_col, "_gpu_driver_evidence", lambda: ["NVIDIA kernel driver"])
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_models"].state is State.UNKNOWN
+
+
+def test_a_hung_nvidia_smi_stays_unknown_even_without_a_driver(monkeypatch, ctx):
+    """A timeout tells us nothing either way. Only a clean non-zero exit with
+    no driver loaded is evidence that there is no GPU."""
+    monkeypatch.setattr(hw_col, "run", failing("timed out after 10.0s", timed_out=True))
+    monkeypatch.setattr(hw_col, "_gpu_driver_evidence", lambda: [])
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_models"].state is State.UNKNOWN

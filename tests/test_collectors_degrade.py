@@ -233,14 +233,68 @@ def test_slurm_fields_populate_under_a_recorded_allocation(monkeypatch, ctx):
     # Present in the allocation but unset: distinguishable from off-cluster.
     assert out["scheduler.gpus"].state is State.NOT_APPLICABLE
     assert "unset" in out["scheduler.gpus"].detail
+    assert out["scheduler.system"].value == "slurm"
 
 
-def test_slurm_fields_are_not_applicable_off_cluster(monkeypatch, ctx):
-    for var in list(sched_col._VARS.values()):
+def _clear_schedulers(monkeypatch):
+    for _n, _m, mapping in sched_col.FAMILIES:
+        for var in mapping.values():
+            monkeypatch.delenv(var, raising=False)
+    for var in sched_col._GENERIC_MARKERS:
         monkeypatch.delenv(var, raising=False)
+
+
+def test_scheduler_fields_are_not_applicable_off_cluster(monkeypatch, ctx):
+    _clear_schedulers(monkeypatch)
     out = sched_col.collect(ctx)
     assert all(f.state is State.NOT_APPLICABLE for f in out.values())
-    assert "not running under Slurm" in out["scheduler.job_id"].detail
+    assert "no batch scheduler" in out["scheduler.system"].detail
+
+
+def test_pbs_allocation_is_captured_not_reported_as_no_scheduler(monkeypatch, ctx):
+    """Reading only SLURM_* meant two different PBS allocations compared as
+    agreeing about their shape."""
+    _clear_schedulers(monkeypatch)
+    monkeypatch.setenv("PBS_JOBID", "9912.head")
+    monkeypatch.setenv("PBS_NUM_NODES", "8")
+    monkeypatch.setenv("PBS_QUEUE", "gpu")
+    out = sched_col.collect(ctx)
+    assert out["scheduler.system"].value == "pbs"
+    assert out["scheduler.job_id"].value == "9912.head"
+    assert out["scheduler.nnodes"].value == "8"
+    assert out["scheduler.cpus_per_task"].state is State.NOT_APPLICABLE  # pbs has no equivalent
+
+
+def test_two_different_pbs_allocations_do_not_match(monkeypatch, ctx, cfg):
+    from ceteris.compare import EXIT_UNDECLARED, compare
+    from ceteris.model import Fingerprint
+
+    _clear_schedulers(monkeypatch)
+    monkeypatch.setenv("PBS_JOBID", "1.head"); monkeypatch.setenv("PBS_NUM_NODES", "4")
+    a = sched_col.collect(ctx)
+    monkeypatch.setenv("PBS_JOBID", "2.head"); monkeypatch.setenv("PBS_NUM_NODES", "16")
+    b = sched_col.collect(ctx)
+    report = compare([Fingerprint(a, {"label": "a"}), Fingerprint(b, {"label": "b"})], cfg=cfg)
+    assert report.exit_code == EXIT_UNDECLARED
+    assert any(r.path == "scheduler.nnodes" for r in report.violations)
+
+
+@pytest.mark.parametrize("marker,system", [
+    ("SLURM_JOB_ID", "slurm"), ("PBS_JOBID", "pbs"),
+    ("LSB_JOBID", "lsf"), ("FLUX_JOB_ID", "flux"),
+])
+def test_each_family_is_recognised(monkeypatch, ctx, marker, system):
+    _clear_schedulers(monkeypatch)
+    monkeypatch.setenv(marker, "123")
+    assert sched_col.collect(ctx)["scheduler.system"].value == system
+
+
+def test_an_unrecognised_scheduler_is_unknown_not_absent(monkeypatch, ctx):
+    _clear_schedulers(monkeypatch)
+    monkeypatch.setenv("COBALT_JOBID", "77")
+    out = sched_col.collect(ctx)
+    assert out["scheduler.system"].state is State.UNKNOWN
+    assert out["scheduler.nnodes"].state is State.UNKNOWN
 
 
 # --- environment allowlist, the highest-value part of the fingerprint --------

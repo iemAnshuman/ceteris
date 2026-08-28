@@ -60,6 +60,11 @@ def wanted() -> int | None:
     return n
 
 
+# Multi-node fan-out is Slurm-only: it uses srun. Under another scheduler the
+# capture is single-node and says so through scheduler.system, rather than
+# pretending the whole allocation was fingerprinted.
+
+
 def _display(f: Field):
     if f.state is State.VALUE:
         return f.value

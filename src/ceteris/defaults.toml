@@ -47,6 +47,7 @@ cmake_keys = [
 "hardware.os_version" = "material"
 "hardware.*" = "material"
 
+"scheduler.system" = "material"
 "scheduler.job_id" = "informational"
 "scheduler.job_name" = "informational"
 "scheduler.submit_dir" = "informational"

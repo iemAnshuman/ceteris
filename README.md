@@ -612,38 +612,41 @@ harnesses can emit it directly.
 
 ## Status
 
-Alpha, but no longer only tested on a laptop. Exercised for real on macOS and
-Linux in CI, and on **LSU's Rostam cluster** on 2026-08-28: login node, a
-single-node V100 allocation, a two-node fan-out, and a heterogeneous
-two-node allocation. Records are committed under
-[`examples/rostam/`](examples/rostam/) with ground truth taken in the same
-jobs.
+Alpha, but the parts that matter have run on real hardware. CI covers Ubuntu
+and macOS on Python 3.9 through 3.14. Ten records captured on **LSU's Rostam
+cluster** are committed under [`examples/rostam/`](examples/rostam/), each
+verified against ground truth taken in the same job:
 
-The heterogeneous case is the one worth looking at, because it is what
-per-node capture exists for:
+| verified on real hardware | |
+|---|---|
+| `ceteris run` with `--repeats` across two nodes | Open MPI 5.0.7, gcc 14.3.0 |
+| per-node fan-out, homogeneous **and heterogeneous** | CUDA 12.8 via `nvcc` |
+| Slurm field mapping | NVIDIA V100 via `nvidia-smi` |
+| Linux CPU, NUMA, governor, turbo, SMT, ASLR, THP | AMD Instinct MI100 via `rocm-smi` |
+| container identity inside a real Apptainer image | a real `CMakeCache.txt` |
+| rust, go, node and JVM toolchains and lockfiles | |
 
-```
-hardware.cpu_model          [['Intel(R) Xeon(R) CPU E5-2660 v3 @ 2.60GHz', 1], ['Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz', 1]]
-hardware.cpu_cores_logical  [[20, 1], [40, 1]]
-hardware.gpu_models         2 node types: V100-PCIE x2 vs V100-SXM2 x4
-hardware.gpu_driver         580.65.06   (identical on 2 nodes)
-```
+Those runs found six bugs, all fixed: `ceteris compare` certified three runs
+whose benchmark had exited 183; `system.*` was taken from the head node
+alone; a failing `nvidia-smi` on a GPU-less login node blocked every
+comparison; the ROCm parser asked `rocm-smi` two questions in one call and
+lost every card row; `java -version` writes to stderr so no JDK was ever
+recorded; and one fingerprint contradicted itself about being in a container.
 
-Two nodes in one allocation, different CPUs and different GPUs, and the
-fingerprint says so instead of describing the head node and calling it the
-allocation.
+**Still unverified — treat as unproven, not as working.** Every one of these
+is written from documentation, which the ROCm case showed is wrong about half
+the time:
 
-It has since also run on an **AMD MI100 node** (`examples/rostam/amd-mi100.json`),
-which is where the ROCm collector was found to be wrong and fixed.
+- schedulers other than Slurm (PBS, LSF, Flux, Grid Engine)
+- MPI other than Open MPI (MPICH, Intel MPI, MVAPICH)
+- five of the eight harness adapters: JMH, criterion, OSU, nccl-tests, MLPerf
+- ARM CPUs (`/proc/cpuinfo` has no `model name` there; it degrades to
+  `unknown`, so it fails safe)
+- the AMD `cpufreq/boost` turbo path, fan-out beyond two nodes, and GPUs
+  within one node reporting different driver versions
 
-Still untested against real hardware: non-Slurm schedulers (PBS, LSF, Flux),
-ARM CPUs, and the JMH, criterion, OSU, nccl-tests and MLPerf output parsers. Those are fixture-tested only. If you run any of them,
-`ceteris capture -o fp.json` and the resulting file is the most useful thing
-you can send.
-
-Runs on the Python a cluster actually has: 3.9 and newer. The shipped
-defaults and packs are JSON so nothing beyond the standard library is needed
-to start; a *user* config may be TOML, which needs 3.11.
+If you run ceteris on any of those, `ceteris capture -o fp.json` and the
+resulting file is the most useful thing you can send.
 
 ```sh
 python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/python -m pytest

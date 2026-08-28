@@ -95,14 +95,13 @@ def collect(ctx) -> dict[str, Field]:
         for key in ("compiler_path", "compiler_id", "compiler_version"):
             out[f"build.{key}"] = unknown(res.detail, provenance=res.provenance)
     else:
-        ident, version = _parse_compiler(res.stdout)
+        ident, version = _parse_compiler(res.banner)
         out["build.compiler_path"] = value(resolved, provenance=source)
         out["build.compiler_id"] = (
             value(ident, provenance=res.provenance)
             if ident
             else unknown(
-                "unrecognised compiler banner: "
-                + " ".join(res.stdout.split())[:120],
+                "unrecognised compiler banner: " + " ".join(res.banner.split())[:120],
                 provenance=res.provenance,
             )
         )

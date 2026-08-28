@@ -43,12 +43,10 @@ def collect(ctx) -> dict[str, Field]:
             key = f"toolchain.{tool}"
             if res.missing:
                 out[key] = not_applicable(res.detail, provenance=res.provenance)
-            elif not res.ok and not res.stdout.strip():
-                # java -version prints to stderr and exits 0; other tools may
-                # exit non-zero yet print a banner. Only a silent failure is unknown.
+            elif not res.ok and not res.banner:
                 out[key] = unknown(res.detail, provenance=res.provenance)
             else:
-                text = res.stdout.strip() or res.detail
+                text = res.banner or res.detail
                 ver = _version(text)
                 out[key] = value(ver, provenance=res.provenance) if ver else unknown(
                     f"no version in: {text[:80]}", provenance=res.provenance)

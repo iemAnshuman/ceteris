@@ -28,8 +28,16 @@ class CmdResult:
     ok: bool
     missing: bool
     stdout: str = ""
+    stderr: str = ""
     detail: str = ""
     timed_out: bool = False
+
+    @property
+    def banner(self) -> str:
+        """Version banners are not consistently on stdout: `java -version`
+        writes to stderr and exits 0, which left toolchain.java permanently
+        unknown. Prefer stdout, fall back to stderr."""
+        return self.stdout.strip() or self.stderr.strip()
 
     @property
     def provenance(self) -> str:
@@ -73,6 +81,7 @@ def run(
             ok=False,
             missing=False,
             stdout=proc.stdout,
+            stderr=proc.stderr,
             detail=f"exit {proc.returncode}: {stderr}" if stderr else f"exit {proc.returncode}",
         )
-    return CmdResult(argv=argv, ok=True, missing=False, stdout=proc.stdout)
+    return CmdResult(argv=argv, ok=True, missing=False, stdout=proc.stdout, stderr=proc.stderr)

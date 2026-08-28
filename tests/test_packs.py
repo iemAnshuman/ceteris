@@ -71,3 +71,25 @@ def test_rocm_pack_activates_on_an_amd_machine(tmp_path, monkeypatch):
     cfg = Config.load(tree=str(tmp_path))
     assert "HSA_OVERRIDE_GFX_VERSION" in cfg.env_allowlist
     assert "RCCL_DEBUG" in cfg.env_allowlist
+
+
+def test_a_version_printed_to_stderr_is_still_captured(tmp_path, monkeypatch):
+    """`java -version` writes to stderr and exits 0. Reading only stdout left
+    toolchain.java permanently unknown, so no Java project could ever record
+    which JDK produced its numbers."""
+    from ceteris.collectors import _run
+
+    (tmp_path / "pom.xml").write_text("<project/>")
+    monkeypatch.setattr(packs, "_which", lambda t: None)
+    cfg = Config.load(tree=str(tmp_path))
+
+    def stderr_only(argv, **kw):
+        if argv[0] == "java":
+            return _run.CmdResult(argv=argv, ok=True, missing=False, stdout="",
+                                  stderr='openjdk version "21.0.5" 2024-10-15 LTS\n')
+        return _run.CmdResult(argv=argv, ok=False, missing=True, detail="absent")
+
+    monkeypatch.setattr(deps, "run", stderr_only)
+    out = deps.collect(Context(cfg=cfg, repo=str(tmp_path)))
+    assert out["toolchain.java"].state is State.VALUE
+    assert out["toolchain.java"].value == "21.0.5"

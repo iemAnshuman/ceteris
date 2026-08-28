@@ -83,6 +83,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="the benchmark command, after --",
     )
 
+    doc = sub.add_parser(
+        "doctor", help="report what a capture could not see, and what looks wrong")
+    doc.add_argument("fingerprint", nargs="?",
+                     help="a record to inspect; omit to capture this machine now")
+    doc.add_argument("--repo", help="path of the source repository (default: cwd)")
+    doc.add_argument("--pack", action="append", default=[], metavar="NAME")
+    doc.add_argument("--config", help="TOML or JSON config extending the defaults")
+
     ls = sub.add_parser("list", help="list recorded runs")
     ls.add_argument("--store", help="directory to read runs from (default: .ceteris/runs)")
 
@@ -279,6 +287,21 @@ def _cmd_run(args) -> int:
     return worst
 
 
+def _cmd_doctor(args) -> int:
+    from . import doctor
+
+    cfg = Config.load(args.config, packs=args.pack, tree=args.repo)
+    if args.fingerprint:
+        fingerprint, local = _load_fingerprint(args.fingerprint), False
+    else:
+        from .capture import capture
+
+        fingerprint, local = capture(repo=args.repo, cfg=cfg, label="this machine"), True
+    findings = doctor.diagnose(fingerprint, local=local)
+    sys.stdout.write(doctor.render(fingerprint, findings))
+    return doctor.exit_code(findings)
+
+
 def _cmd_list(args) -> int:
     store = store_mod.store_path(args.store)
     paths = store_mod.all_runs(store)
@@ -323,6 +346,7 @@ def main(argv: list[str] | None = None) -> int:
         "capture": _cmd_capture,
         "run": _cmd_run,
         "list": _cmd_list,
+        "doctor": _cmd_doctor,
         "compare": _cmd_compare,
         "verify": _cmd_verify,
     }[args.subcommand]

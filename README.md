@@ -522,6 +522,38 @@ installed, its results come along.
 **A library.** `from ceteris import compare`, `from ceteris.runner import
 run_command`.
 
+## Checking the capture itself
+
+A fingerprint is 150 fields, and reading it by eye to decide whether ceteris
+understood the machine does not scale. `ceteris doctor` does it:
+
+```console
+$ ceteris doctor
+this machine: 127 fields (29 captured, 98 not applicable, 0 unknown, 0 error)
+
+WORTH KNOWING (will widen the noise floor):
+  system.power_source  battery: on battery the CPU is throttled
+  source.dirty         the working tree had uncommitted changes; the commit does not describe the code
+```
+
+Three groups, and the middle one is the point:
+
+- **LOOKS WRONG** -- a claim contradicted by the machine itself. "No GPU" is
+  a normal answer on a laptop and a suspicious one where `/dev/kfd` exists.
+  Exit 1. This is the check that would have caught the AMD bug before a
+  cluster did.
+- **COULD NOT BE READ** -- every unknown, with its reason. Exit 2.
+- **WORTH KNOWING** -- turbo on, a scaling governor, battery power, a busy
+  machine, a dirty tree. Never a failure; these are the things that make
+  numbers move before any code changes.
+
+Pass a record file to inspect a capture from another machine, which is the
+useful form when someone sends you one:
+
+```sh
+ceteris doctor examples/rostam/het2.json
+```
+
 ## Declaring intent
 
 ```sh

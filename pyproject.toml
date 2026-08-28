@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ceteris"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Capture benchmark run environment fingerprints and gate comparisons between them."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -48,6 +48,11 @@ ceteris = "ceteris.cli:main"
 
 [project.entry-points.pytest11]
 ceteris = "ceteris.pytest_plugin"
+
+[tool.setuptools.dynamic]
+# One source of truth. The version was declared here and in __init__.py, and
+# nothing stopped them drifting.
+version = { attr = "ceteris.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,6 +1,8 @@
 # ceteris
 
 [![ci](https://github.com/iemAnshuman/ceteris/actions/workflows/ci.yml/badge.svg)](https://github.com/iemAnshuman/ceteris/actions/workflows/ci.yml)
+[![pypi](https://img.shields.io/pypi/v/ceteris)](https://pypi.org/project/ceteris/)
+[![python](https://img.shields.io/pypi/pyversions/ceteris)](https://pypi.org/project/ceteris/)
 
 **Wrap any benchmark. Refuse the comparison unless it is valid.**
 
@@ -19,7 +21,7 @@ fails. It sits underneath the harness you already use.
 Named for *ceteris paribus*: all other things being equal.
 
 ```sh
-pipx install git+https://github.com/iemAnshuman/ceteris.git
+pip install ceteris        # or: pipx install ceteris
 ```
 
 Python 3.9+. No runtime dependencies.

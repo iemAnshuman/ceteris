@@ -7,6 +7,7 @@ import sys
 
 import pytest
 
+from ceteris import packs
 from ceteris.config import Config
 
 
@@ -14,6 +15,26 @@ def test_defaults_load():
     cfg = Config.load()
     assert "OMP_NUM_THREADS" in cfg.env_allowlist
     assert "CMAKE_BUILD_TYPE" in cfg.cmake_keys
+
+
+def test_hpc_pack_supplies_the_tuning_variables_the_defaults_do_not(monkeypatch):
+    """The HPC knobs live in the `hpc` pack, not in the defaults, so a project
+    outside HPC is not asked to carry them.
+
+    `hpc` auto-activates on mpirun/mpiexec/srun being on PATH, so the ambient
+    environment decides what Config.load() returns. That is precisely why the
+    four tests this one replaces passed on a laptop with MPI installed and
+    failed on a clean runner: they asserted a default that was really a pack.
+    Pin the PATH probe so this test answers the same on both."""
+    monkeypatch.setattr(packs, "_which", lambda t: None)
+
+    base = Config.load()
+    assert "LCI_ATTR_PACKET_SIZE" not in base.env_allowlist
+    assert "HPX_WITH_PARCELPORT_LCI" not in base.cmake_keys
+
+    hpc = Config.load(packs=["hpc"])
+    assert "LCI_ATTR_PACKET_SIZE" in hpc.env_allowlist
+    assert "HPX_WITH_PARCELPORT_LCI" in hpc.cmake_keys
 
 
 def test_longest_glob_wins():

@@ -37,7 +37,7 @@ jobs:
       # MPI, GPU or scheduler. A collector that errors here fails the build.
       - run: |
           ceteris capture --repo . -o fp.json
-          python -c "import json,sys; f=json.load(open('fp.json'))['fields']; bad=[k for k,v in f.items() if v['s']=='error']; print(len(f),'fields'); sys.exit(bad and print(bad))"
+          python -c "import json,sys; f=json.load(open('fp.json'))['fields']; bad=[k for k,v in f.items() if v['s']=='error']; print(len(f),'fields'); bad and sys.exit('collectors errored: %s' % bad)"
       # The exit-code contract is the CI integration; check it on the real binary.
       - name: hyperfine zero-config (ubuntu)
         if: runner.os == 'Linux'

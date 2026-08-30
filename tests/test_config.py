@@ -12,7 +12,7 @@ from ceteris.config import Config
 
 def test_defaults_load():
     cfg = Config.load()
-    assert "LCI_ATTR_PACKET_SIZE" in cfg.env_allowlist
+    assert "OMP_NUM_THREADS" in cfg.env_allowlist
     assert "CMAKE_BUILD_TYPE" in cfg.cmake_keys
 
 
@@ -40,7 +40,7 @@ def test_user_config_extends_the_env_allowlist(tmp_path):
     )
     cfg = Config.load(user)
     assert "MY_PROJECT_TUNABLE" in cfg.env_allowlist
-    assert "LCI_ATTR_PACKET_SIZE" in cfg.env_allowlist  # defaults are kept
+    assert "OMP_NUM_THREADS" in cfg.env_allowlist  # defaults are kept
     assert cfg.severity_of("hardware.hostnames") == "critical"
 
 

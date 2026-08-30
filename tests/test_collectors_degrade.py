@@ -29,6 +29,13 @@ def ctx(cfg: Config) -> Context:
     return Context(cfg=cfg)
 
 
+@pytest.fixture
+def hpc_ctx() -> Context:
+    """The HPC tuning variables live in the `hpc` pack rather than the
+    defaults, so a test about them has to ask for the pack."""
+    return Context(cfg=Config.load(packs=["hpc"]))
+
+
 def missing(argv, **kw):
     return _run.CmdResult(argv=argv, ok=False, missing=True, detail=f"{argv[0]} not on PATH")
 
@@ -266,18 +273,18 @@ def test_an_unrecognised_scheduler_is_unknown_not_absent(monkeypatch, ctx):
 # --- environment allowlist, the highest-value part of the fingerprint --------
 
 
-def test_unset_tuning_variable_is_recorded_not_skipped(monkeypatch, ctx):
+def test_unset_tuning_variable_is_recorded_not_skipped(monkeypatch, hpc_ctx):
     """A tuned run and a default run must differ visibly. If the unset side
     were simply absent, the 8 KB default would silently compare equal to a
     tuned 73728."""
     monkeypatch.delenv("LCI_ATTR_PACKET_SIZE", raising=False)
-    out = rt_col.collect(ctx)
+    out = rt_col.collect(hpc_ctx)
     field = out["runtime.env.LCI_ATTR_PACKET_SIZE"]
     assert field.state is State.NOT_APPLICABLE
     assert field.detail == "unset"
 
     monkeypatch.setenv("LCI_ATTR_PACKET_SIZE", "73728")
-    out = rt_col.collect(ctx)
+    out = rt_col.collect(hpc_ctx)
     assert out["runtime.env.LCI_ATTR_PACKET_SIZE"].value == "73728"
 
 
@@ -297,12 +304,12 @@ def test_cmake_cache_is_parsed(ctx, tmp_path):
         "// comment\n"
         "CMAKE_BUILD_TYPE:STRING=Release\n"
         "CMAKE_CXX_FLAGS:STRING=-O3 -march=native\n"
-        "HPX_WITH_PARCELPORT_LCI:BOOL=ON\n"
+        "BUILD_SHARED_LIBS:BOOL=ON\n"
     )
     ctx.cmake_cache = str(tmp_path)
     out = build_col.collect(ctx)
     assert out["build.cmake.CMAKE_BUILD_TYPE"].value == "Release"
-    assert out["build.cmake.HPX_WITH_PARCELPORT_LCI"].value == "ON"
+    assert out["build.cmake.BUILD_SHARED_LIBS"].value == "ON"
     assert out["build.type"].value == "Release"
     assert out["build.cxx_flags"].value == "-O3 -march=native"
 

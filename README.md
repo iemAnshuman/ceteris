@@ -21,7 +21,7 @@ fails. It sits underneath the harness you already use.
 Named for *ceteris paribus*: all other things being equal.
 
 ```sh
-pip install ceteris        # or: pipx install ceteris
+pip install ceteris        # or: pipx install ceteris, or: uv tool install ceteris
 ```
 
 Python 3.9+. No runtime dependencies.

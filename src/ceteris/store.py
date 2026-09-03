@@ -42,7 +42,13 @@ def ensure(store: Path) -> None:
     touching the user's own .gitignore.
     """
     store.mkdir(parents=True, exist_ok=True)
-    marker = store.parent / ".gitignore" if store.name == "runs" else store / ".gitignore"
+    # Only the default layout owns its parent. Any other store called
+    # "runs" -- ~/campaigns/runs, say -- used to get the marker written into
+    # ~/campaigns, ignoring everything the user kept there.
+    if store.name == "runs" and store.parent.name == ".ceteris":
+        marker = store.parent / ".gitignore"
+    else:
+        marker = store / ".gitignore"
     if not marker.exists():
         marker.write_text("# created by ceteris; the run store is not source\n*\n")
 

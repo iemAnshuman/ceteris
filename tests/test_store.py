@@ -72,3 +72,12 @@ def test_the_store_ignores_itself_so_it_does_not_dirty_the_repo(tmp_path: Path):
         ["git", "status", "--porcelain"], cwd=tmp_path, capture_output=True, text=True
     ).stdout
     assert status.strip() == "", status
+
+
+def test_a_custom_store_does_not_ignore_its_parent(tmp_path: Path):
+    """The self-ignore marker belongs to the store, not to whatever
+    directory the user happened to put a store called `runs` under."""
+    store = tmp_path / "campaign" / "runs"
+    store_mod.save(make("r1", "2026-08-26T10:00:00+00:00"), store)
+    assert not (tmp_path / "campaign" / ".gitignore").exists()
+    assert (store / ".gitignore").read_text().strip().endswith("*")

@@ -262,6 +262,18 @@ def test_each_family_is_recognised(monkeypatch, ctx, marker, system):
     assert sched_col.collect(ctx)["scheduler.system"].value == system
 
 
+def test_lsf_node_count_is_hosts_not_slots(monkeypatch, ctx):
+    """LSB_MAX_NUM_PROCESSORS is a slot count and once stood in for the node
+    count, so a 40-slot single-node job read as a 40-node allocation."""
+    _clear_schedulers(monkeypatch)
+    monkeypatch.setenv("LSB_JOBID", "9")
+    monkeypatch.setenv("LSB_MAX_NUM_PROCESSORS", "40")
+    monkeypatch.setenv("LSB_HOSTS", "h1 h1 h1 h1 h2 h2 h2 h2")
+    out = sched_col.collect(ctx)
+    assert out["scheduler.nnodes"].value == 2
+    assert "LSB_HOSTS" in out["scheduler.nnodes"].provenance
+
+
 def test_an_unrecognised_scheduler_is_unknown_not_absent(monkeypatch, ctx):
     _clear_schedulers(monkeypatch)
     monkeypatch.setenv("COBALT_JOBID", "77")

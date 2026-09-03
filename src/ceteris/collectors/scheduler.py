@@ -42,7 +42,7 @@ FAMILIES = (
     }),
     ("lsf", "LSB_JOBID", {
         "job_id": "LSB_JOBID", "job_name": "LSB_JOBNAME", "partition": "LSB_QUEUE",
-        "nnodes": "LSB_MAX_NUM_PROCESSORS", "ntasks": "LSB_DJOB_NUMPROC",
+        "ntasks": "LSB_DJOB_NUMPROC",
         "nodelist": "LSB_HOSTS", "submit_dir": "LS_SUBCWD",
     }),
     ("flux", "FLUX_JOB_ID", {
@@ -99,6 +99,16 @@ def collect(ctx) -> dict[str, Field]:
     out["scheduler.system"] = value(system, provenance=f"${mapping['job_id']} set")
     for name in FIELDS:
         var = mapping.get(name)
+        if system == "lsf" and name == "nnodes":
+            # LSF exposes no node count; LSB_MAX_NUM_PROCESSORS is a slot
+            # count and once stood in here, so a 40-slot single-node job read
+            # as a 40-node allocation. LSB_HOSTS lists one host per slot.
+            hosts = os.environ.get("LSB_HOSTS", "").split()
+            out["scheduler.nnodes"] = (
+                value(len(set(hosts)), provenance="distinct hosts in $LSB_HOSTS")
+                if hosts else not_applicable("$LSB_HOSTS unset", provenance="$LSB_HOSTS")
+            )
+            continue
         if var is None:
             out[f"scheduler.{name}"] = not_applicable(
                 f"{system} does not expose this", provenance=f"{system} environment"

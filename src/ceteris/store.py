@@ -76,10 +76,22 @@ def load(path: str | Path) -> Fingerprint:
     return fingerprint
 
 
+_NAME = re.compile(r"^(\d{8}-\d{6}Z)-(.*?)(?:-(\d+))?\.json$")
+
+
+def _order(path: Path):
+    """Chronological within a second too: `x-2.json` sorts after `x.json`,
+    where plain string order put the dash before the dot."""
+    m = _NAME.match(path.name)
+    if not m:
+        return ("", path.name, 0)
+    return (m.group(1), m.group(2), int(m.group(3) or 1))
+
+
 def all_runs(store: Path) -> list[Path]:
     if not store.is_dir():
         return []
-    return sorted(store.glob("*.json"))
+    return sorted(store.glob("*.json"), key=_order)
 
 
 def select(

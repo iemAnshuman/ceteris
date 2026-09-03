@@ -81,3 +81,10 @@ def test_a_custom_store_does_not_ignore_its_parent(tmp_path: Path):
     store_mod.save(make("r1", "2026-08-26T10:00:00+00:00"), store)
     assert not (tmp_path / "campaign" / ".gitignore").exists()
     assert (store / ".gitignore").read_text().strip().endswith("*")
+
+
+def test_repeats_recorded_in_one_second_list_in_order(tmp_path: Path):
+    store = tmp_path / "runs"
+    paths = [store_mod.save(make("r", "2026-08-26T10:00:00+00:00"), store) for _ in range(3)]
+    assert store_mod.all_runs(store) == paths
+    assert store_mod.select(store, last=1) == [paths[-1]]

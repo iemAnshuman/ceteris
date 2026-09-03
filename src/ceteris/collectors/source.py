@@ -3,9 +3,20 @@
 from __future__ import annotations
 
 import os
+import re
 
 from ..model import Field, not_applicable, unknown, value
 from ._run import run
+
+_FIELDS = ("commit", "branch", "dirty", "submodules")
+
+# The one failure that means "there is no repository here". Every other
+# failure -- a directory git refuses as dubiously owned (the usual case on a
+# shared cluster or in a CI container), a corrupt .git, a permissions error --
+# means the repository may well exist and could not be read. Reporting those
+# as not_applicable let two runs in an unreadable repository compare as
+# agreeing about their commit.
+_NOT_A_REPO = re.compile(r"not a git repository", re.I)
 
 
 def collect(ctx) -> dict[str, Field]:
@@ -13,6 +24,13 @@ def collect(ctx) -> dict[str, Field]:
     out: dict[str, Field] = {
         "source.repo_path": value(repo, provenance="--repo")
     }
+
+    if not os.path.isdir(repo):
+        for name in _FIELDS:
+            out[f"source.{name}"] = unknown(
+                f"{repo} is not a directory", provenance="--repo"
+            )
+        return out
 
     top = run(["git", "rev-parse", "--show-toplevel"], cwd=repo)
     if top.missing:
@@ -22,14 +40,20 @@ def collect(ctx) -> dict[str, Field]:
         # agreeing about their commit, which is the worst failure this tool
         # can have. Absence of a tool only implies absence of the thing when
         # the tool IS the thing (no nvidia-smi means no NVIDIA stack).
-        for name in ("commit", "branch", "dirty", "submodules"):
+        for name in _FIELDS:
             out[f"source.{name}"] = unknown(top.detail, provenance="git")
         return out
     if not top.ok:
-        for name in ("commit", "branch", "dirty", "submodules"):
-            out[f"source.{name}"] = not_applicable(
-                "not inside a git repository", provenance=top.provenance
-            )
+        if _NOT_A_REPO.search(top.stderr or ""):
+            for name in _FIELDS:
+                out[f"source.{name}"] = not_applicable(
+                    "not inside a git repository", provenance=top.provenance
+                )
+        else:
+            for name in _FIELDS:
+                out[f"source.{name}"] = unknown(
+                    f"git refused the repository: {top.detail}", provenance=top.provenance
+                )
         return out
 
     commit = run(["git", "rev-parse", "HEAD"], cwd=repo)

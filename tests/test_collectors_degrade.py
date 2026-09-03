@@ -298,6 +298,35 @@ def test_non_git_directory_degrades(ctx, tmp_path):
     assert "not inside a git repository" in out["source.commit"].detail
 
 
+def test_a_nonexistent_repo_path_is_unknown_not_absent(ctx, tmp_path):
+    """A typo in --repo used to read as "no repository", and two runs with
+    the same typo agreed about their commit."""
+    ctx.repo = str(tmp_path / "nowhere")
+    out = src_col.collect(ctx)
+    for name in ("commit", "branch", "dirty", "submodules"):
+        assert out[f"source.{name}"].state is State.UNKNOWN
+    assert "not a directory" in out["source.commit"].detail
+
+
+def test_git_refusing_the_repository_is_unknown_not_absent(monkeypatch, ctx, tmp_path):
+    """The common cluster and CI case: the checkout is owned by another uid
+    and git answers `fatal: detected dubious ownership`. That is not "no
+    repository"; the repository is right there. Only git's own "not a git
+    repository" answer may become not_applicable."""
+    def refusing(argv, **kw):
+        return _run.CmdResult(
+            argv=argv, ok=False, missing=False, detail="exit 128: fatal: detected dubious ownership",
+            stderr="fatal: detected dubious ownership in repository at '/work/x'\n",
+        )
+
+    monkeypatch.setattr(src_col, "run", refusing)
+    ctx.repo = str(tmp_path)
+    out = src_col.collect(ctx)
+    for name in ("commit", "branch", "dirty", "submodules"):
+        assert out[f"source.{name}"].state is State.UNKNOWN
+    assert "dubious ownership" in out["source.commit"].detail
+
+
 def test_cmake_cache_is_parsed(ctx, tmp_path):
     cache = tmp_path / "CMakeCache.txt"
     cache.write_text(

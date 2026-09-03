@@ -8,6 +8,13 @@ inputs:
   command:
     description: The benchmark command (a hyperfine, Google Benchmark, pytest-benchmark, JMH, cargo bench or plain command).
     required: true
+  build:
+    description: >-
+      Shell commands that build the benchmark, run after checking out the base
+      and again after checking out the head. Without this both sides run
+      whatever binary was already in the tree, and the comparison measures
+      nothing.
+    default: ""
   repeats:
     description: Runs per side. Three or more enables the noise floor.
     default: "3"
@@ -41,6 +48,7 @@ runs:
         set -e
         git fetch -q origin "${{ github.event.pull_request.base.sha || github.event.before }}" || true
         git checkout -q "${{ github.event.pull_request.base.sha || github.event.before }}"
+        if [ -n "${{ inputs.build }}" ]; then ${{ inputs.build }}; fi
         args=()
         while IFS= read -r m; do [ -n "$m" ] && args+=(--metric "$m"); done <<< "${{ inputs.metric }}"
         ceteris run --label base --repeats "${{ inputs.repeats }}" "${args[@]}" -- ${{ inputs.command }}
@@ -51,6 +59,7 @@ runs:
       run: |
         set -e
         git checkout -q "${{ github.event.pull_request.head.sha || github.sha }}"
+        if [ -n "${{ inputs.build }}" ]; then ${{ inputs.build }}; fi
         args=()
         while IFS= read -r m; do [ -n "$m" ] && args+=(--metric "$m"); done <<< "${{ inputs.metric }}"
         ceteris run --label head --repeats "${{ inputs.repeats }}" "${args[@]}" -- ${{ inputs.command }}
@@ -60,7 +69,10 @@ runs:
         CETERIS_STORE: ${{ runner.temp }}/ceteris-runs
       run: |
         set +e
-        vary=(--vary source --vary execution.program_sha256 --vary deps)
+        # Base and head are different builds by design; everything else gates.
+        vary=(--vary source --vary deps
+              --vary execution.program_sha256 --vary execution.program_scripts_sha256
+              --vary execution.subject_sha256 --vary execution.subject_scripts_sha256)
         IFS=',' read -ra extra <<< "${{ inputs.vary }}"
         for v in "${extra[@]}"; do [ -n "$v" ] && vary+=(--vary "$v"); done
         signal=""; [ "${{ inputs.require-signal }}" = "true" ] && signal="--require-signal"

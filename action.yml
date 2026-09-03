@@ -44,11 +44,15 @@ runs:
       shell: bash
       env:
         CETERIS_STORE: ${{ runner.temp }}/ceteris-runs
+        # Through the environment, not substituted into the script: an empty
+        # build made `then ; fi`, a syntax error, and a build string is not
+        # something to paste into a shell script unquoted.
+        CETERIS_BUILD: ${{ inputs.build }}
       run: |
         set -e
         git fetch -q origin "${{ github.event.pull_request.base.sha || github.event.before }}" || true
         git checkout -q "${{ github.event.pull_request.base.sha || github.event.before }}"
-        if [ -n "${{ inputs.build }}" ]; then ${{ inputs.build }}; fi
+        if [ -n "$CETERIS_BUILD" ]; then bash -ec "$CETERIS_BUILD"; fi
         args=()
         while IFS= read -r m; do [ -n "$m" ] && args+=(--metric "$m"); done <<< "${{ inputs.metric }}"
         ceteris run --label base --repeats "${{ inputs.repeats }}" "${args[@]}" -- ${{ inputs.command }}
@@ -56,10 +60,11 @@ runs:
       shell: bash
       env:
         CETERIS_STORE: ${{ runner.temp }}/ceteris-runs
+        CETERIS_BUILD: ${{ inputs.build }}
       run: |
         set -e
         git checkout -q "${{ github.event.pull_request.head.sha || github.sha }}"
-        if [ -n "${{ inputs.build }}" ]; then ${{ inputs.build }}; fi
+        if [ -n "$CETERIS_BUILD" ]; then bash -ec "$CETERIS_BUILD"; fi
         args=()
         while IFS= read -r m; do [ -n "$m" ] && args+=(--metric "$m"); done <<< "${{ inputs.metric }}"
         ceteris run --label head --repeats "${{ inputs.repeats }}" "${args[@]}" -- ${{ inputs.command }}

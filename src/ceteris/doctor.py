@@ -81,6 +81,21 @@ def _container_contradiction(fp: Fingerprint, local: bool) -> Finding | None:
     return None
 
 
+def _multinode_contradiction(fp: Fingerprint, local: bool) -> Finding | None:
+    """A record that describes one node of a many-node job. Records from
+    this version say so themselves; records from other producers, or from
+    older versions, may not."""
+    allocated, seen = _v(fp, "scheduler.nnodes"), _v(fp, "hardware.node_count")
+    try:
+        allocated = int(str(allocated).strip()) if allocated is not None else None
+    except ValueError:
+        return None
+    if allocated and allocated > 1 and seen == 1:
+        return Finding(SUSPECT, "hardware.node_count",
+                       f"the scheduler allocated {allocated} nodes but the record describes 1")
+    return None
+
+
 def diagnose(fp: Fingerprint, local: bool = True) -> list[Finding]:
     """local=False when inspecting a record captured on another machine, where
     checking this machine's filesystem would be meaningless."""
@@ -93,7 +108,8 @@ def diagnose(fp: Fingerprint, local: bool = True) -> list[Finding]:
         elif f.state is State.UNKNOWN:
             findings.append(Finding(BLIND, path, f.detail or "could not be read"))
 
-    for check in (_gpu_contradiction, _scheduler_contradiction, _container_contradiction):
+    for check in (_gpu_contradiction, _scheduler_contradiction, _container_contradiction,
+                  _multinode_contradiction):
         found = check(fp, local)
         if found:
             findings.append(found)

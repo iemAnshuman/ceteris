@@ -54,6 +54,14 @@ def test_a_container_claimed_absent_inside_one_is_suspect(monkeypatch):
     assert (doctor.SUSPECT, "deps.container_runtime") in levels(doctor.diagnose(record, local=True))
 
 
+def test_one_node_of_a_many_node_job_is_suspect():
+    record = fp("x", scheduler__nnodes="16", hardware__node_count=1)
+    findings = doctor.diagnose(record, local=False)
+    assert (doctor.SUSPECT, "hardware.node_count") in levels(findings)
+    fine = fp("y", scheduler__nnodes="16", hardware__node_count=16)
+    assert not [f for f in doctor.diagnose(fine, local=False) if f.level == doctor.SUSPECT]
+
+
 def test_noise_widening_settings_are_notes_not_failures():
     record = fp("x", system__cpu_governor="powersave", system__turbo="on",
                 system__power_source="battery", source__dirty=True)

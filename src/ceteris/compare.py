@@ -163,7 +163,9 @@ class Report:
             return EXIT_INDETERMINATE
         if self.strict and (self.constant_declarations or self.unmatched_declarations):
             return EXIT_UNDECLARED
-        if self.require_signal and self.noise and not any(v.assessed and not v.within_noise for v in self.noise):
+        # No metric at all is the strongest form of "nothing beat the noise
+        # floor"; it used to pass because the noise list was empty.
+        if self.require_signal and not any(v.assessed and not v.within_noise for v in self.noise):
             return EXIT_WITHIN_NOISE
         return EXIT_OK
 

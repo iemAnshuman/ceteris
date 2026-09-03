@@ -48,6 +48,16 @@ def test_gap_inside_scatter_is_within_noise(cfg):
     assert strict.exit_code == EXIT_WITHIN_NOISE
 
 
+def test_require_signal_with_no_metric_at_all_is_not_a_result(cfg):
+    """Two captures with no measurement used to pass --require-signal,
+    because the noise list was empty and the check only looked inside it."""
+    a = Fingerprint({"source.commit": value("x")}, {"label": "a"})
+    b = Fingerprint({"source.commit": value("y")}, {"label": "b"})
+    report = compare([a, b], vary=["source.commit"], cfg=cfg, require_signal=True)
+    assert report.exit_code == EXIT_WITHIN_NOISE
+    assert "no metric was measured" in render(report)
+
+
 def test_gap_above_scatter_is_signal(cfg):
     a = [rec("a", "x", v) for v in (49.0, 50.0, 51.0)]
     b = [rec("b", "y", v) for v in (99.0, 100.0, 101.0)]

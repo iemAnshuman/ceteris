@@ -255,7 +255,10 @@ def render(report: Report) -> str:
             out.append("OK: every difference was declared. Comparison is valid.")
     elif code == 4:
         out.append("")
-        out.append("NOT A RESULT: the comparison is valid but no metric shows a gap above the noise floor.")
+        if report.noise:
+            out.append("NOT A RESULT: the comparison is valid but no metric shows a gap above the noise floor.")
+        else:
+            out.append("NOT A RESULT: the comparison is valid but no metric was measured, so nothing can show a signal.")
     return "\n".join(out) + "\n"
 
 

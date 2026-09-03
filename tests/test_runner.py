@@ -27,6 +27,22 @@ def test_exit_code_is_passed_through(cfg):
     assert bad.run["exit_code"] == 3
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals")
+def test_a_signal_killed_benchmark_is_not_reported_as_success(cfg):
+    """Popen reports a signal death as a negative code; taking the maximum
+    over repeats turned that into 0 and a crashed run passed through."""
+    from ceteris.cli import main
+
+    killed = run_command(
+        [sys.executable, "-c", "import os, signal; os.kill(os.getpid(), signal.SIGTERM)"],
+        cfg=cfg, echo=False,
+    )
+    assert killed.run["exit_code"] == 128 + 15
+    assert killed.run["signal"] == 15
+    assert main(["run", "--no-store", "-q", "--", sys.executable, "-c",
+                 "import os, signal; os.kill(os.getpid(), signal.SIGTERM)"]) == 143
+
+
 def test_output_is_captured_and_metrics_extracted(cfg):
     record = run_command(
         [sys.executable, "-c", PRINTER],

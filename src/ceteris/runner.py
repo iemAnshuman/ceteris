@@ -128,6 +128,12 @@ def run_command(
             sys.stdout.flush()
     exit_code = proc.wait()
     duration = time.monotonic() - clock
+    # A process killed by a signal has a negative return code here. Reported
+    # raw, `max()` over repeats turned it into 0 and a crashed benchmark
+    # passed through as success. Use the shell's convention instead.
+    signal_number = -exit_code if exit_code < 0 else None
+    if signal_number:
+        exit_code = 128 + signal_number
 
     output = "".join(chunks)
     after = capture(label=label, **kwargs)
@@ -138,6 +144,7 @@ def run_command(
     truncated = len(output) > MAX_OUTPUT
     record: dict[str, Any] = {
         "exit_code": exit_code,
+        **({"signal": signal_number} if signal_number else {}),
         "started_at": started.isoformat(timespec="seconds"),
         "duration_s": round(duration, 3),
         "output": output[-MAX_OUTPUT:],

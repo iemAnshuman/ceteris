@@ -451,6 +451,45 @@ def test_a_hung_nvidia_smi_stays_unknown_even_without_a_driver(monkeypatch, ctx)
     assert out["hardware.gpu_models"].state is State.UNKNOWN
 
 
+def test_amd_gpus_are_found_behind_a_failing_nvidia_smi(monkeypatch, ctx):
+    """A shared cluster image ships nvidia-smi on every node, including the
+    MI100 nodes, where it exits 9 while /dev/kfd exists and rocm-smi works.
+    The NVIDIA probe used to claim the answer and leave the node unknown."""
+    products = '{"card0": {"Card Series": "AMD Instinct MI100"}, "card1": {"Card Series": "AMD Instinct MI100"}}'
+    driver = '{"system": {"Driver version": "6.12.12"}}'
+
+    def mixed(argv, **kw):
+        if argv[0] == "nvidia-smi":
+            return _run.CmdResult(argv=argv, ok=False, missing=False, detail="exit 9: NVIDIA-SMI has failed")
+        if argv[0] == "rocm-smi":
+            return _run.CmdResult(argv=argv, ok=True, missing=False,
+                                  stdout=driver if "--showdriverversion" in argv else products)
+        return missing(argv)
+
+    monkeypatch.setattr(hw_col, "run", mixed)
+    monkeypatch.setattr(hw_col, "_gpu_driver_evidence", lambda: ["AMD compute device /dev/kfd"])
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_vendor"].value == "amd"
+    assert out["hardware.gpu_count"].value == 2
+    assert out["hardware.gpu_driver"].value == "6.12.12"
+
+
+def test_a_hung_nvidia_smi_is_not_overridden_by_rocm(monkeypatch, ctx):
+    """A hang says nothing either way, and a box may carry both stacks."""
+    def mixed(argv, **kw):
+        if argv[0] == "nvidia-smi":
+            return _run.CmdResult(argv=argv, ok=False, missing=False, detail="timed out after 10.0s", timed_out=True)
+        if argv[0] == "rocm-smi":
+            return _run.CmdResult(argv=argv, ok=True, missing=False, stdout='{"card0": {"Card Series": "MI100"}}')
+        return missing(argv)
+
+    monkeypatch.setattr(hw_col, "run", mixed)
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_vendor"].state is State.UNKNOWN
+
+
 def test_rocm_json_is_parsed_from_real_mi100_output(monkeypatch, ctx):
     """Recorded from ROCm-SMI 3.0.0 on Rostam's kamand1 (2x Instinct MI100).
 

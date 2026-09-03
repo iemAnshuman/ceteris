@@ -8,7 +8,7 @@ import os
 import platform
 import re
 
-from ..model import Field, not_applicable, unknown, value
+from ..model import Field, State, not_applicable, unknown, value
 from ._run import run
 
 
@@ -96,11 +96,13 @@ def _gpu_driver_evidence() -> list[str]:
     return [why for path, why in _GPU_DRIVER_SIGNALS if os.path.exists(path)]
 
 
-def _nvidia(out: dict[str, Field]) -> bool:
-    """True when nvidia-smi answered, either with data or with a real failure."""
+def _nvidia(out: dict[str, Field]) -> str:
+    """One of: "missing" (no nvidia-smi), "hung" (timed out), "failed"
+    (exited non-zero with a driver loaded), "absent" (no GPU, definitively),
+    "data"."""
     res = run(["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"], timeout=10)
     if res.missing:
-        return False
+        return "missing"
     if not res.ok:
         # Clusters ship nvidia-smi in a shared image, so it exists on GPU-less
         # login nodes and exits non-zero because no driver is loaded. Treating
@@ -114,10 +116,10 @@ def _nvidia(out: dict[str, Field]) -> bool:
                     f"nvidia-smi failed ({res.detail}) and no GPU driver is loaded",
                     provenance=res.provenance,
                 )
-        else:
-            for key in _GPU_FIELDS:
-                out[f"hardware.{key}"] = unknown(res.detail, provenance=res.provenance)
-        return True
+            return "absent"
+        for key in _GPU_FIELDS:
+            out[f"hardware.{key}"] = unknown(res.detail, provenance=res.provenance)
+        return "hung" if res.timed_out else "failed"
     rows = [r.strip() for r in res.stdout.splitlines() if r.strip()]
     models, drivers = [], set()
     for row in rows:
@@ -133,7 +135,7 @@ def _nvidia(out: dict[str, Field]) -> bool:
         if len(drivers) == 1
         else unknown(f"GPUs report differing driver versions: {sorted(drivers)}", provenance=res.provenance)
     )
-    return True
+    return "data"
 
 
 def _rocm_json(argv: list[str]):
@@ -207,8 +209,29 @@ def _gpu(out: dict[str, Field]) -> None:
     absence of a GPU. Before concluding there is no accelerator, look for a
     loaded driver: an AMD box has no nvidia-smi, and reporting not_applicable
     there would let two different AMD machines compare as agreeing about their
-    GPUs."""
-    if not (_nvidia(out) or _amd(out)):
+    GPUs.
+
+    A failing nvidia-smi does not settle the question either. Clusters ship
+    it in a shared image, so an MI100 node can have nvidia-smi exiting 9,
+    /dev/kfd present, and rocm-smi answering perfectly well; letting the
+    NVIDIA probe claim the answer left such nodes unknown for good.
+    """
+    nv: dict[str, Field] = {}
+    status = _nvidia(nv)
+    if status in ("data", "absent", "hung"):
+        # Data, a definitive no, or a hang that says nothing either way.
+        out.update(nv)
+        _cuda(out)
+        return
+    amd: dict[str, Field] = {}
+    amd_answered = _amd(amd)
+    if amd_answered and amd["hardware.gpu_vendor"].state is State.VALUE:
+        out.update(amd)
+    elif status == "failed":
+        out.update(nv)
+    elif amd_answered:
+        out.update(amd)
+    else:
         evidence = _gpu_driver_evidence()
         if evidence:
             for key in _GPU_FIELDS:
@@ -222,6 +245,10 @@ def _gpu(out: dict[str, Field]) -> None:
                 out[f"hardware.{key}"] = not_applicable(
                     "no GPU query tool and no loaded GPU driver", provenance="nvidia-smi, rocm-smi"
                 )
+    _cuda(out)
+
+
+def _cuda(out: dict[str, Field]) -> None:
 
     nvcc = run(["nvcc", "--version"])
     if nvcc.missing:

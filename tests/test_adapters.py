@@ -77,6 +77,19 @@ def test_mlperf_reconstructed_fixture(tmp_path):
     assert out["mlperf.result"].value == "VALID"
 
 
+def test_google_benchmark_repetitions_are_folded_not_overwritten(tmp_path):
+    out = tmp_path / "gb.json"
+    out.write_text(json.dumps({"benchmarks": [
+        {"name": "BM_x", "run_type": "iteration", "real_time": 10.0, "time_unit": "ns"},
+        {"name": "BM_x", "run_type": "iteration", "real_time": 30.0, "time_unit": "ns"},
+        {"name": "BM_x", "run_type": "iteration", "real_time": 20.0, "time_unit": "ns"},
+        {"name": "BM_x_mean", "run_type": "aggregate", "real_time": 20.0, "time_unit": "ns"},
+    ]}))
+    got = collect(adapters.GoogleBenchmark(), out)
+    assert got["gbench.BM_x.real_time_ns"].value == 20.0
+    assert "median of 3" in got["gbench.BM_x.real_time_ns"].provenance
+
+
 def test_a_missing_output_file_is_unknown_not_empty():
     out = collect(adapters.Hyperfine(), "/nonexistent.json")
     assert out["hyperfine._adapter"].state is State.UNKNOWN

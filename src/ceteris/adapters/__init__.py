@@ -24,6 +24,7 @@ import re
 import tempfile
 import time
 from dataclasses import dataclass
+from statistics import median
 from typing import Any, Callable
 
 from ..model import Field, unknown, value
@@ -154,12 +155,22 @@ class GoogleBenchmark(Adapter):
         data, err = self._read_json(plan.output)
         if err:
             return self._failed(err)
-        out: dict[str, Field] = {}
+        # --benchmark_repetitions=N writes N iteration entries per name and
+        # then the aggregates. Keying by name overwrote each with the next,
+        # so only the last repetition survived. Take the median across them.
+        runs: dict[str, list] = {}
         for b in data.get("benchmarks", []):
             if b.get("run_type") == "aggregate":
                 continue
             unit = b.get("time_unit", "ns")
-            out[f"gbench.{b.get('name', '?')}.real_time_{unit}"] = value(_num(b.get("real_time")), provenance="--benchmark_out json")
+            runs.setdefault(f"gbench.{b.get('name', '?')}.real_time_{unit}", []).append(_num(b.get("real_time")))
+        out: dict[str, Field] = {}
+        for key, xs in runs.items():
+            nums = [x for x in xs if isinstance(x, float)]
+            if len(nums) > 1:
+                out[key] = value(median(nums), provenance=f"--benchmark_out json, median of {len(nums)} repetitions")
+            else:
+                out[key] = value(xs[0], provenance="--benchmark_out json")
         return out or self._failed("no benchmarks in output")
 
 

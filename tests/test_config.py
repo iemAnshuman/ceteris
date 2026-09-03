@@ -43,6 +43,20 @@ def test_longest_glob_wins():
     assert cfg.severity_of("hardware.cpu_model") == "material"
 
 
+def test_where_a_job_landed_does_not_gate():
+    """Two jobs on the same partition draw different nodes every time; the
+    node list gating meant no two submissions ever compared, and repeats
+    across submissions never folded into one configuration. Same for the
+    absolute path of a CMake cache: the build tree's location is not the
+    build."""
+    cfg = Config.load()
+    assert cfg.severity_of("scheduler.nodelist") == "informational"
+    assert cfg.severity_of("build.cmake_cache_path") == "informational"
+    assert cfg.severity_of("scheduler.partition") == "material"
+    assert cfg.severity_of("hardware.node_count") == "material"
+    assert cfg.severity_of("build.cmake.CMAKE_CXX_FLAGS") == "critical"
+
+
 def test_unlisted_field_defaults_to_gating():
     assert Config.load().severity_of("some.brand.new.field") == "material"
 

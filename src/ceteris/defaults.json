@@ -38,6 +38,7 @@
   "metrics": {},
   "severity": {
     "build.*": "critical",
+    "build.cmake_cache_path": "informational",
     "deps.*": "critical",
     "deps.container_image_sha256": "critical",
     "deps.container_runtime": "critical",
@@ -61,6 +62,7 @@
     "scheduler.*": "material",
     "scheduler.job_id": "informational",
     "scheduler.job_name": "informational",
+    "scheduler.nodelist": "informational",
     "scheduler.submit_dir": "informational",
     "scheduler.system": "material",
     "source.branch": "informational",

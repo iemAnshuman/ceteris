@@ -140,3 +140,30 @@ def test_a_tool_banner_outside_utf8_is_still_read():
 
     res = run([sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'tool 1.2.3 \\xff')"])
     assert res.ok and "1.2.3" in res.stdout
+
+
+def test_ctrl_c_terminates_the_benchmark(cfg, monkeypatch):
+    """A wrapper that dies on Ctrl-C and leaves a 16-node job running is
+    worse than no wrapper."""
+    import ceteris.runner as runner_mod
+
+    events = []
+
+    class FakeProc:
+        def __init__(self, *a, **k):
+            self.stdout = self
+        def __iter__(self):
+            events.append("reading")
+            raise KeyboardInterrupt
+        def terminate(self):
+            events.append("terminate")
+        def wait(self, timeout=None):
+            events.append("wait")
+            return 143
+        def kill(self):
+            events.append("kill")
+
+    monkeypatch.setattr(runner_mod.subprocess, "Popen", FakeProc)
+    with pytest.raises(KeyboardInterrupt):
+        run_command([sys.executable, "-c", "pass"], cfg=cfg, echo=False)
+    assert events == ["reading", "terminate", "wait"]

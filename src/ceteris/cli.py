@@ -355,6 +355,8 @@ def main(argv: list[str] | None = None) -> int:
         return handler(args)
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         parser.exit(EXIT_USAGE, f"ceteris: {exc}\n")
+    except KeyboardInterrupt:
+        parser.exit(130, "ceteris: interrupted\n")
 
 
 if __name__ == "__main__":  # pragma: no cover

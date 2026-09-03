@@ -124,12 +124,22 @@ def run_command(
         raise ValueError(f"could not launch {command[0]!r}: {exc}") from exc
 
     assert proc.stdout is not None
-    for line in proc.stdout:
-        chunks.append(line)
-        if echo:
-            sys.stdout.write(line)
-            sys.stdout.flush()
-    exit_code = proc.wait()
+    try:
+        for line in proc.stdout:
+            chunks.append(line)
+            if echo:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+        exit_code = proc.wait()
+    except KeyboardInterrupt:
+        # Do not leave the benchmark running behind a dead wrapper.
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        raise
     duration = time.monotonic() - clock
     # A process killed by a signal has a negative return code here. Reported
     # raw, `max()` over repeats turned it into 0 and a crashed benchmark

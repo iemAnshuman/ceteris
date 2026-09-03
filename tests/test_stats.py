@@ -23,6 +23,27 @@ def test_identical_environments_group_into_one_configuration():
     assert groups[0].label == "a"
 
 
+def test_the_same_configuration_from_a_different_source_is_one_configuration(cfg):
+    """compare grouped by canonical value while the table grouped by the
+    serialised field, provenance included, so a match in the report could be
+    two configurations in the table."""
+    from ceteris.model import Field, State
+
+    def r(flags, prov):
+        return Fingerprint({"build.cxx_flags": Field(State.VALUE, flags, provenance=prov)},
+                           {"label": "x"}, metrics={"bw": value(1.0)}, run={"exit_code": 0})
+
+    runs = [r("-O3 -g", "--cxx-flags")] * 3 + [r("-g -O3", "$CXXFLAGS")] * 3
+    report = compare(runs, cfg=cfg)
+    assert report.results[0].verdict.value == "match"
+    assert len(report.configs) == 1 and report.configs[0].n == 6
+
+
+def test_folded_labels_are_all_shown(cfg):
+    runs = [rec("before", "x", 1.0)] * 3 + [rec("after", "x", 1.0)] * 3
+    assert [g.label for g in stats.group_configs(runs, cfg)] == ["before, after"]
+
+
 def test_spread_is_range_over_median():
     g = stats.ConfigGroup("h", "a", [rec("a", "x", v) for v in (9.0, 10.0, 11.0)])
     st = stats.stats_for(g, "bw")

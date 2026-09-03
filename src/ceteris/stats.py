@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from statistics import median
 from typing import Sequence
 
+from . import comparators
 from .config import GATING_SEVERITIES, Config
 from .model import Fingerprint, State
 
@@ -21,17 +22,32 @@ MIN_REPEATS = 3
 
 
 def config_key(fp: Fingerprint, cfg: Config) -> str:
-    """Identity of a configuration: a hash over the gating fields only.
+    """Identity of a configuration: a hash over the gating fields only, each
+    reduced to the canonical value compare groups on.
 
     The record's content hash covers every field, including informational
     ones like the load average that differ between any two moments. Grouping
-    on that would make every repeat its own configuration.
+    on that would make every repeat its own configuration. Hashing the
+    serialised field was still too strict: it carried the provenance and the
+    raw token order, so the same flags given as `--cxx-flags` on one run and
+    `$CXXFLAGS` on the next, or written in another order, compared as a match
+    in the report and yet split into two configurations in the table, with
+    a noise floor computed between them.
     """
     import hashlib
     import json
 
-    body = {k: fp.fields[k].to_json() for k in sorted(fp.fields) if cfg.severity_of(k) in GATING_SEVERITIES}
-    return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    body = []
+    for path in sorted(fp.fields):
+        if cfg.severity_of(path) not in GATING_SEVERITIES:
+            continue
+        f = fp.fields[path]
+        if f.state is State.VALUE:
+            body.append((path, "v", comparators.get(cfg.comparator_of(path))(f.value)))
+        else:
+            body.append((path, f.state.value))
+    blob = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()
 
 
 @dataclass
@@ -88,6 +104,12 @@ def group_configs(fingerprints: Sequence[Fingerprint], cfg: Config | None = None
         if h not in groups:
             groups[h] = ConfigGroup(content_hash=h, label=fp.label)
         groups[h].members.append(fp)
+    # Runs labelled differently that turn out to be one configuration (a
+    # "before" and an "after" with the binary never rebuilt) fold together;
+    # the table should say so rather than show one label and hide the other.
+    for g in groups.values():
+        labels = list(dict.fromkeys(fp.label for fp in g.members))
+        g.label = ", ".join(labels)
     return list(groups.values())
 
 

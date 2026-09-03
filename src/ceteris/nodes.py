@@ -64,9 +64,19 @@ def wanted() -> int | None:
     return n
 
 
-# Multi-node fan-out is Slurm-only: it uses srun. Under another scheduler the
-# capture is single-node and says so through scheduler.system, rather than
-# pretending the whole allocation was fingerprinted.
+# Multi-node fan-out is Slurm-only: it uses srun. Under another scheduler
+# the node-local fields of a multi-node job are unknown (see `apply`), rather
+# than pretending the whole allocation was fingerprinted.
+
+
+def _allocated_nodes(head: Fingerprint) -> int:
+    f = head.fields.get("scheduler.nnodes")
+    if f is None or f.state is not State.VALUE:
+        return 1
+    try:
+        return int(str(f.value).strip())
+    except ValueError:
+        return 1
 
 
 def _display(f: Field):
@@ -193,6 +203,22 @@ def apply(
             [host.value] if host and host.state is State.VALUE else [],
             provenance=host.provenance if host else "platform.uname().node",
         )
+        allocated = _allocated_nodes(head)
+        if allocated > 1 and not os.environ.get(NODE_MODE_ENV):
+            # The scheduler says the job spans several nodes and no fan-out
+            # was possible: another scheduler, or Slurm without srun on
+            # PATH. Describing the head node as the allocation is the false
+            # certification this module exists to prevent, so the node-local
+            # fields are unknown and the record says why.
+            why = (
+                f"{allocated}-node allocation, but per-node capture needs Slurm's "
+                "srun on PATH; only the head node was seen"
+            )
+            for path in list(fields):
+                if is_node_local(path) and path != "hardware.hostnames":
+                    fields[path] = unknown(why, provenance="scheduler.nnodes")
+            fields["hardware.node_count"] = value(allocated, provenance="scheduler.nnodes")
+            return Fingerprint(fields, dict(head.meta), run=head.run, metrics=head.metrics)
         fields["hardware.node_count"] = value(1, provenance="single-host capture")
         return Fingerprint(fields, dict(head.meta), run=head.run, metrics=head.metrics)
     per_node = fanout(n, capture_args)

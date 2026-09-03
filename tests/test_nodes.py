@@ -105,6 +105,27 @@ def test_apply_pads_unreported_nodes_and_fails_closed(monkeypatch):
     assert merged.fields["hardware.node_count"].value == 3
 
 
+def test_a_multi_node_job_without_fan_out_fails_closed(monkeypatch):
+    """PBS, LSF, Flux, or Slurm with no srun on PATH: the scheduler says
+    sixteen nodes, the capture saw one. Zero of sixteen is not a
+    fingerprint any more than fifteen of sixteen is."""
+    monkeypatch.delenv("SLURM_JOB_NUM_NODES", raising=False)
+    monkeypatch.delenv(nodes.NODE_MODE_ENV, raising=False)
+    head = node("pbs-head")
+    head.fields["scheduler.nnodes"] = value("16")
+    head.fields["scheduler.system"] = value("pbs")
+    merged = nodes.apply(head, [])
+    assert merged.fields["hardware.node_count"].value == 16
+    assert merged.fields["hardware.gpu_driver"].state is State.UNKNOWN
+    assert "srun" in merged.fields["hardware.gpu_driver"].detail
+    assert merged.fields["source.commit"].state is State.VALUE  # not node-local, untouched
+    # The fanned-out node task itself must stay a plain single-host capture.
+    monkeypatch.setenv(nodes.NODE_MODE_ENV, "1")
+    plain = nodes.apply(head, [])
+    assert plain.fields["hardware.gpu_driver"].state is State.VALUE
+    assert plain.fields["hardware.node_count"].value == 1
+
+
 def test_single_host_capture_uses_the_same_schema():
     single = nodes.apply(node("laptop"), [])
     assert single.fields["hardware.hostnames"].value == ["laptop"]

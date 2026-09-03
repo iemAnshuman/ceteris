@@ -267,9 +267,10 @@ def _cmd_run(args) -> int:
         ingest=args.ingest,
     )
     worst = 0
-    for record in records:
-        if args.output and len(records) == 1:
-            Path(args.output).write_text(record.dumps(), encoding="utf-8")
+    outputs = _output_paths(args.output, len(records))
+    for record, out_path in zip(records, outputs):
+        if out_path:
+            Path(out_path).write_text(record.dumps(), encoding="utf-8")
         if not args.no_store:
             path = store_mod.save(record, store_mod.store_path(args.store))
             sys.stderr.write(f"ceteris: recorded {path}\n")
@@ -279,13 +280,20 @@ def _cmd_run(args) -> int:
                 f"({len(record.drift)} field(s)); this run is not certifiable\n"
             )
         worst = max(worst, int(record.run.get("exit_code", 0)))
-    if args.output and len(records) > 1:
-        Path(args.output).write_text(
-            json.dumps([r.to_json() for r in records], indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
     # The wrapped command's exit code is passed through so that wrapping a
     # benchmark in ceteris does not change how a surrounding script behaves.
     return worst
+
+
+def _output_paths(output: str | None, n: int) -> list:
+    """-o with --repeats used to write one JSON list, which nothing could
+    read back. One record per file: out.json, out-2.json, out-3.json."""
+    if not output:
+        return [None] * n
+    if n == 1:
+        return [output]
+    base = Path(output)
+    return [str(base)] + [str(base.with_name(f"{base.stem}-{i}{base.suffix}")) for i in range(2, n + 1)]
 
 
 def _cmd_doctor(args) -> int:

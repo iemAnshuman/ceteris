@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import pytest
 
@@ -195,3 +196,15 @@ def test_compare_with_an_empty_store_says_so(store, capsys):
         main(["compare"])
     assert exc.value.code == EXIT_USAGE
     assert "no runs selected" in capsys.readouterr().err
+
+
+def test_output_with_repeats_writes_one_readable_record_per_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    out = tmp_path / "rec.json"
+    main(["run", "--no-store", "-q", "-o", str(out), "--repeats", "3", "--", sys.executable, "-c", "pass"])
+    from ceteris.model import Fingerprint
+
+    written = sorted(p.name for p in tmp_path.glob("rec*.json"))
+    assert written == ["rec-2.json", "rec-3.json", "rec.json"]
+    for p in tmp_path.glob("rec*.json"):
+        assert Fingerprint.from_json(json.loads(p.read_text())).meta["kind"] == "run"

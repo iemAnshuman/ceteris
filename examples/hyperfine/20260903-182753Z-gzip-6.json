@@ -100,15 +100,55 @@
       "p": "--build-type",
       "s": "not_applicable"
     },
+    "deps.Pipfile.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/Pipfile.lock",
+      "s": "not_applicable"
+    },
+    "deps.conda-lock.yml": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/conda-lock.yml",
+      "s": "not_applicable"
+    },
     "deps.container_image": {
-      "d": "no container image variable set",
-      "p": "$CONTAINER_IMAGE",
+      "d": "not running inside a container",
+      "p": "container image variables",
+      "s": "not_applicable"
+    },
+    "deps.container_runtime": {
+      "d": "not running inside a container",
+      "p": "/.singularity.d, /.dockerenv, /run/.containerenv",
+      "s": "not_applicable"
+    },
+    "deps.environment.yml": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/environment.yml",
+      "s": "not_applicable"
+    },
+    "deps.poetry.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/poetry.lock",
+      "s": "not_applicable"
+    },
+    "deps.requirements.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/requirements.lock",
+      "s": "not_applicable"
+    },
+    "deps.requirements.txt": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/requirements.txt",
+      "s": "not_applicable"
+    },
+    "deps.uv.lock": {
+      "d": "not present in tree",
+      "p": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/uv.lock",
       "s": "not_applicable"
     },
     "execution.command": {
       "p": "wrapped command line",
       "s": "value",
-      "v": "hyperfine -N --warmup 1 --runs 5 gzip -1 -c /tmp/payload.txt"
+      "v": "hyperfine -N --warmup 1 --runs 5 'gzip -6 -c /tmp/payload.txt'"
     },
     "execution.launcher": {
       "d": "no recognised launcher; program run directly",
@@ -126,26 +166,49 @@
       "v": "hyperfine"
     },
     "execution.program_args": {
-      "p": "heuristic split of the wrapped command line",
+      "p": "heuristic split of the wrapped command line; the harness's own options, the timed commands are in execution.subject",
       "s": "value",
       "v": [
         "-N",
         "--warmup",
         "1",
         "--runs",
-        "5",
-        "gzip -1 -c /tmp/payload.txt"
+        "5"
       ]
+    },
+    "execution.program_scripts_sha256": {
+      "d": "no script file among the program arguments",
+      "p": "program arguments",
+      "s": "not_applicable"
     },
     "execution.program_sha256": {
       "p": "sha256 of /opt/homebrew/bin/hyperfine",
       "s": "value",
       "v": "0ba6ba0e83ab1684ef3c181ca71e611031b9e97eee274a85c608f7ba3f1453af"
     },
+    "execution.subject": {
+      "p": "positional commands of hyperfine (heuristic option parse)",
+      "s": "value",
+      "v": [
+        "gzip -6 -c /tmp/payload.txt"
+      ]
+    },
+    "execution.subject_scripts_sha256": {
+      "d": "no script file among the subjects' arguments",
+      "p": "subjects",
+      "s": "not_applicable"
+    },
+    "execution.subject_sha256": {
+      "p": "sha256 of each subject's executable (positional commands of hyperfine (heuristic option parse))",
+      "s": "value",
+      "v": {
+        "gzip": "9d9ea8f05c84ad28dc2007701c0cc4d8bb4465c57219afe21fc446859c99b0c9"
+      }
+    },
     "execution.workdir": {
       "p": "os.getcwd()",
       "s": "value",
-      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/examples/hyperfine"
+      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris"
     },
     "hardware.arch": {
       "p": "platform.uname().machine",
@@ -173,18 +236,23 @@
       "s": "not_applicable"
     },
     "hardware.gpu_count": {
-      "d": "nvidia-smi not on PATH",
-      "p": "nvidia-smi",
+      "d": "no GPU query tool and no loaded GPU driver",
+      "p": "nvidia-smi, rocm-smi",
       "s": "not_applicable"
     },
     "hardware.gpu_driver": {
-      "d": "nvidia-smi not on PATH",
-      "p": "nvidia-smi",
+      "d": "no GPU query tool and no loaded GPU driver",
+      "p": "nvidia-smi, rocm-smi",
       "s": "not_applicable"
     },
     "hardware.gpu_models": {
-      "d": "nvidia-smi not on PATH",
-      "p": "nvidia-smi",
+      "d": "no GPU query tool and no loaded GPU driver",
+      "p": "nvidia-smi, rocm-smi",
+      "s": "not_applicable"
+    },
+    "hardware.gpu_vendor": {
+      "d": "no GPU query tool and no loaded GPU driver",
+      "p": "nvidia-smi, rocm-smi",
       "s": "not_applicable"
     },
     "hardware.hostnames": {
@@ -223,7 +291,8 @@
       "p": "pack activation",
       "s": "value",
       "v": [
-        "hpc"
+        "hpc",
+        "python"
       ]
     },
     "parallelism.binding_intent": {
@@ -349,9 +418,19 @@
       "p": "$LD_PRELOAD",
       "s": "not_applicable"
     },
+    "runtime.env.MALLOC_ARENA_MAX": {
+      "d": "unset",
+      "p": "$MALLOC_ARENA_MAX",
+      "s": "not_applicable"
+    },
     "runtime.env.MALLOC_CONF": {
       "d": "unset",
       "p": "$MALLOC_CONF",
+      "s": "not_applicable"
+    },
+    "runtime.env.MKL_NUM_THREADS": {
+      "d": "unset",
+      "p": "$MKL_NUM_THREADS",
       "s": "not_applicable"
     },
     "runtime.env.MPICH_ASYNC_PROGRESS": {
@@ -362,6 +441,11 @@
     "runtime.env.MPICH_NEMESIS_NETMOD": {
       "d": "unset",
       "p": "$MPICH_NEMESIS_NETMOD",
+      "s": "not_applicable"
+    },
+    "runtime.env.NUMEXPR_NUM_THREADS": {
+      "d": "unset",
+      "p": "$NUMEXPR_NUM_THREADS",
       "s": "not_applicable"
     },
     "runtime.env.OMPI_MCA_btl": {
@@ -402,6 +486,31 @@
     "runtime.env.OMP_SCHEDULE": {
       "d": "unset",
       "p": "$OMP_SCHEDULE",
+      "s": "not_applicable"
+    },
+    "runtime.env.OPENBLAS_NUM_THREADS": {
+      "d": "unset",
+      "p": "$OPENBLAS_NUM_THREADS",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONDONTWRITEBYTECODE": {
+      "d": "unset",
+      "p": "$PYTHONDONTWRITEBYTECODE",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONHASHSEED": {
+      "d": "unset",
+      "p": "$PYTHONHASHSEED",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONMALLOC": {
+      "d": "unset",
+      "p": "$PYTHONMALLOC",
+      "s": "not_applicable"
+    },
+    "runtime.env.PYTHONOPTIMIZE": {
+      "d": "unset",
+      "p": "$PYTHONOPTIMIZE",
       "s": "not_applicable"
     },
     "runtime.env.TCMALLOC_RELEASE_RATE": {
@@ -450,53 +559,58 @@
       "s": "not_applicable"
     },
     "scheduler.cpus_per_task": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_CPUS_PER_TASK",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
       "s": "not_applicable"
     },
     "scheduler.gpus": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_GPUS_ON_NODE",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
       "s": "not_applicable"
     },
     "scheduler.job_id": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_JOB_ID",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
       "s": "not_applicable"
     },
     "scheduler.job_name": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_JOB_NAME",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
       "s": "not_applicable"
     },
     "scheduler.nnodes": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_JOB_NUM_NODES",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
       "s": "not_applicable"
     },
     "scheduler.nodelist": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_JOB_NODELIST",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
       "s": "not_applicable"
     },
     "scheduler.ntasks": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_NTASKS",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
       "s": "not_applicable"
     },
     "scheduler.ntasks_per_node": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_NTASKS_PER_NODE",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
       "s": "not_applicable"
     },
     "scheduler.partition": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_JOB_PARTITION",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
       "s": "not_applicable"
     },
     "scheduler.submit_dir": {
-      "d": "not running under Slurm",
-      "p": "$SLURM_SUBMIT_DIR",
+      "d": "not running under a batch scheduler",
+      "p": "environment",
+      "s": "not_applicable"
+    },
+    "scheduler.system": {
+      "d": "no batch scheduler in the environment (checked slurm, pbs, lsf, flux, sge)",
+      "p": "environment",
       "s": "not_applicable"
     },
     "source.branch": {
@@ -507,17 +621,17 @@
     "source.commit": {
       "p": "git rev-parse HEAD",
       "s": "value",
-      "v": "30f325bb004e662bf952e41a90c75e55e2a208d7"
+      "v": "9f95f5ae7a9e424acebd86832ae225182fd399ba"
     },
     "source.dirty": {
       "p": "git status --porcelain",
       "s": "value",
-      "v": true
+      "v": false
     },
     "source.repo_path": {
       "p": "--repo",
       "s": "value",
-      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris/examples/hyperfine"
+      "v": "/Users/anshumanagrawal/codes/workplace/2026_projects/ceteris"
     },
     "source.submodules": {
       "d": "repository has no submodules",
@@ -530,7 +644,7 @@
       "v": "always-on"
     },
     "system.container": {
-      "p": "darwin",
+      "p": "container runtime markers",
       "s": "value",
       "v": "no"
     },
@@ -542,7 +656,7 @@
     "system.load_1m": {
       "p": "os.getloadavg()[0]",
       "s": "value",
-      "v": 2.65
+      "v": 1.74
     },
     "system.mem_available_mb": {
       "d": "not tracked on darwin in this version",
@@ -552,7 +666,7 @@
     "system.power_source": {
       "p": "pmset -g batt",
       "s": "value",
-      "v": "battery"
+      "v": "ac"
     },
     "system.smt": {
       "p": "sysctl hw.logicalcpu vs hw.physicalcpu",
@@ -583,38 +697,43 @@
       "p": "sysctl -n kern.hv_vmm_present",
       "s": "value",
       "v": "none"
+    },
+    "toolchain.python": {
+      "p": "python3 --version",
+      "s": "value",
+      "v": "3.14.7"
     }
   },
   "meta": {
     "adapter": "hyperfine",
-    "captured_at": "2026-08-27T21:54:06+00:00",
-    "content_hash": "bf71e3dc1b4a13392bbe5283019d1db2c8757ed375a4aade5abf167f6699113a",
+    "captured_at": "2026-09-03T18:27:53+00:00",
+    "content_hash": "fbb4b2dc5ea395c9305080f791572a88e1a2114e53d833713b3ebd0b0bdce9f0",
     "kind": "run",
-    "label": "gzip-1",
-    "repeat": 3,
-    "schema_version": 2,
-    "series": "gzip-1@2026-08-27T21:53:59+00:00",
+    "label": "gzip-6",
+    "repeat": 1,
+    "schema_version": 3,
+    "series": "gzip-6@2026-09-03T18:27:53+00:00",
     "tool": "ceteris",
-    "tool_version": "0.1.0"
+    "tool_version": "0.2.0"
   },
   "metrics": {
     "hyperfine.median_s": {
-      "p": "hyperfine --export-json (injected); command: gzip -1 -c /tmp/payload.txt",
+      "p": "hyperfine --export-json (injected); command: gzip -6 -c /tmp/payload.txt",
       "s": "value",
-      "v": 0.510042709
+      "v": 0.627624833
     },
     "hyperfine.min_s": {
-      "p": "hyperfine --export-json (injected); command: gzip -1 -c /tmp/payload.txt",
+      "p": "hyperfine --export-json (injected); command: gzip -6 -c /tmp/payload.txt",
       "s": "value",
-      "v": 0.509563459
+      "v": 0.6228147500000001
     }
   },
   "run": {
     "drift": [],
-    "duration_s": 3.089,
+    "duration_s": 3.754,
     "exit_code": 0,
-    "output": "Benchmark 1: gzip -1 -c /tmp/payload.txt\n  Time (mean \u00b1 \u03c3):     511.3 ms \u00b1   3.2 ms    [User: 506.7 ms, System: 3.6 ms]\n  Range (min \u2026 max):   509.6 ms \u2026 517.0 ms    5 runs\n \n  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.\n \n",
+    "output": "Benchmark 1: gzip -6 -c /tmp/payload.txt\n  Time (mean \u00b1 \u03c3):     626.9 ms \u00b1   2.6 ms    [User: 622.4 ms, System: 3.4 ms]\n  Range (min \u2026 max):   622.8 ms \u2026 629.8 ms    5 runs\n \n",
     "output_truncated": false,
-    "started_at": "2026-08-27T21:54:06+00:00"
+    "started_at": "2026-09-03T18:27:53+00:00"
   }
 }

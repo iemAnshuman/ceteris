@@ -42,67 +42,73 @@ $ ceteris compare
 
 MEASUREMENTS (per configuration):
   configuration    n  metric                  min     median        max  spread
-  gzip-6    3  hyperfine.median_s     0.6401     0.6411     0.6417     0%
-  gzip-6    3  hyperfine.min_s       0.639     0.6396     0.6411     0%
-  gzip-1    3  hyperfine.median_s       0.51     0.5302     0.5328     4%
-  gzip-1    3  hyperfine.min_s      0.5096     0.5265     0.5301     4%
+  gzip-6           3  hyperfine.median_s     0.6276     0.6337     0.6417     2%
+  gzip-6           3  hyperfine.min_s      0.6228     0.6306     0.6361     2%
+  gzip-1           3  hyperfine.median_s     0.5076     0.5089     0.5092     0%
+  gzip-1           3  hyperfine.min_s       0.507     0.5082     0.5085     0%
 
 NOISE FLOOR:
-  hyperfine.median_s signal        gap 21% exceeds the largest within-configuration spread of 4%
-  hyperfine.min_s  signal        gap 21% exceeds the largest within-configuration spread of 4%
+  hyperfine.median_s signal        gap 25% exceeds the largest within-configuration spread of 2%
+  hyperfine.min_s  signal        gap 24% exceeds the largest within-configuration spread of 2%
 
 UNDECLARED DIFFERENCES (comparison is not valid):
-  execution.program_args  -N, --warmup, 1, --runs, 5, gzip -6 -c /tmp/p… (gzip-6 x3)  vs  -N, --warmup, 1, --runs, 5, gzip -1 -c /tmp/p… (gzip-1 x3)
+  execution.subject  gzip -6 -c /tmp/payload.txt (gzip-6 x3)  vs  gzip -1 -c /tmp/payload.txt (gzip-1 x3)
 
 DIFFERS, NOT GATING (informational severity):
-  execution.command       hyperfine -N --warmup 1 --runs 5 gzip -6 -c /… (gzip-6 x3)  vs  hyperfine -N --warmup 1 --runs 5 gzip -1 -c /… (gzip-1 x3)
-  system.load_1m          5 distinct values across 6 runs (range 2.57 to 2.71)
+  execution.command  hyperfine -N --warmup 1 --runs 5 'gzip -6 -c … (gzip-6 x3)  vs  hyperfine -N --warmup 1 --runs 5 'gzip -1 -c … (gzip-1 x3)
+  system.load_1m     5 distinct values across 6 runs (range 1.53 to 1.74)
 
-Matched on 112 other fields.
+Matched on 135 other fields.
 $ echo $?
 1
 ```
 
-The tool found a real 21% signal above a 4% noise floor -- and still refused,
-because the command line changed and nobody said that was the experiment.
-Declare it, and ask for a certificate:
+The tool found a real 25% signal above a 2% noise floor -- and still refused,
+because the command hyperfine timed changed and nobody said that was the
+experiment. It knows which part of the line is hyperfine's and which is the
+subject: the options still gate, the subject is one field. Declare it, and ask
+for a certificate:
 
 ```console
-$ ceteris compare --vary execution.program_args --require-signal --certify
-6 runs compared. Declared varying: execution.program_args
+$ ceteris compare --vary execution.subject --require-signal --certify
+6 runs compared. Declared varying: execution.subject
 
 MEASUREMENTS (per configuration):
   configuration    n  metric                  min     median        max  spread
-  gzip-6    3  hyperfine.median_s     0.6401     0.6411     0.6417     0%
-  gzip-6    3  hyperfine.min_s       0.639     0.6396     0.6411     0%
-  gzip-1    3  hyperfine.median_s       0.51     0.5302     0.5328     4%
-  gzip-1    3  hyperfine.min_s      0.5096     0.5265     0.5301     4%
+  gzip-6           3  hyperfine.median_s     0.6276     0.6337     0.6417     2%
+  gzip-6           3  hyperfine.min_s      0.6228     0.6306     0.6361     2%
+  gzip-1           3  hyperfine.median_s     0.5076     0.5089     0.5092     0%
+  gzip-1           3  hyperfine.min_s       0.507     0.5082     0.5085     0%
 
 NOISE FLOOR:
-  hyperfine.median_s signal        gap 21% exceeds the largest within-configuration spread of 4%
-  hyperfine.min_s  signal        gap 21% exceeds the largest within-configuration spread of 4%
+  hyperfine.median_s signal        gap 25% exceeds the largest within-configuration spread of 2%
+  hyperfine.min_s  signal        gap 24% exceeds the largest within-configuration spread of 2%
 
 DECLARED VARYING (expected):
-  execution.program_args  -N, --warmup, 1, --runs, 5, gzip -6 -c /tmp/p… (gzip-6 x3)  vs  -N, --warmup, 1, --runs, 5, gzip -1 -c /tmp/p… (gzip-1 x3)
+  execution.subject  gzip -6 -c /tmp/payload.txt (gzip-6 x3)  vs  gzip -1 -c /tmp/payload.txt (gzip-1 x3)
 
 DIFFERS, NOT GATING (informational severity):
-  execution.command       hyperfine -N --warmup 1 --runs 5 gzip -6 -c /… (gzip-6 x3)  vs  hyperfine -N --warmup 1 --runs 5 gzip -1 -c /… (gzip-1 x3)
-  system.load_1m          5 distinct values across 6 runs (range 2.57 to 2.71)
+  execution.command  hyperfine -N --warmup 1 --runs 5 'gzip -6 -c … (gzip-6 x3)  vs  hyperfine -N --warmup 1 --runs 5 'gzip -1 -c … (gzip-1 x3)
+  system.load_1m     5 distinct values across 6 runs (range 1.53 to 1.74)
 
-Matched on 112 other fields.
+Matched on 135 other fields.
 
 OK: every difference was declared. Comparison is valid.
 
-ceteris-certified v1 configs=2 n=3,3 vary=execution.program_args waive= strict=0 verdict=ok noise=4% sha256:b3969923f4e69dd904dfc11239aa4d6a719b67ca64434beb732e76aa13276969
+ceteris-certified v2 configs=2 n=3,3 vary=execution.subject waive= strict=0 signal=1 verdict=ok noise=2% config=02282b8304e8 sha256:5913ed8e93600be80a67276d1e98d7ab0354d80e65ffe701e998ca0ff3365ccf
 $ echo $?
 0
 ```
 
 That last line is portable. Paste it into a README, a pull request or a
-paper's artifact appendix, and anyone holding the records can check it:
+paper's artifact appendix, and anyone holding the records can check it. It
+binds every record in full -- every field, every measurement, the exit code --
+so a number nudged after the fact fails the check, and it names the severity
+configuration it was issued under, so a verifier holding a different one is
+told that rather than shown a bare mismatch:
 
 ```console
-$ ceteris verify 'ceteris-certified v1 configs=2 n=3,3 vary=execution.program_args waive= strict=0 verdict=ok noise=4% sha256:b3969923f4e69dd904dfc11239aa4d6a719b67ca64434beb732e76aa13276969' examples/hyperfine/*.json
+$ ceteris verify 'ceteris-certified v2 configs=2 n=3,3 vary=execution.subject waive= strict=0 signal=1 verdict=ok noise=2% config=02282b8304e8 sha256:5913ed8e93600be80a67276d1e98d7ab0354d80e65ffe701e998ca0ff3365ccf' examples/hyperfine/*.json
 ceteris: verified: ok
 ```
 
@@ -119,8 +125,8 @@ $ ceteris compare examples/pingpong/*.json --vary build.cxx_flags
 
 MEASUREMENTS (per configuration):
   configuration    n  metric                  min     median        max  spread
-  tuned-O3    3  bandwidth_gbs         48.59      49.15       52.9     9%
-  tuned-O0    3  bandwidth_gbs          45.5      46.51      51.57    13%
+  tuned-O3         3  bandwidth_gbs         48.59      49.15       52.9     9%
+  tuned-O0         3  bandwidth_gbs          45.5      46.51      51.57    13%
 
 NOISE FLOOR:
   bandwidth_gbs    WITHIN NOISE  gap 6% between configuration medians is not larger than the 13% spread within a single configuration
@@ -164,7 +170,7 @@ gets published:
 
 ## What it captures
 
-One record per run, ~131 fields, every field carrying its own provenance and one
+One record per run, ~138 fields, every field carrying its own provenance and one
 of four states. This is [`examples/pingpong/20260827-215234Z-tuned-O3-2.json`](examples/pingpong/20260827-215234Z-tuned-O3-2.json),
 excerpted to the 41 fields that carried a value plus a few that degraded:
 
@@ -421,7 +427,7 @@ excerpted to the 41 fields that carried a value plus a few that degraded:
 |---|---|
 | `source` | commit, dirty flag, submodules |
 | `build` | compiler, flags, CMake cache entries |
-| `execution` | launcher, launcher args, program, program args, **sha256 of the binary** |
+| `execution` | launcher, launcher args, program, program args, **sha256 of the binary**; under a harness, the command it times and **that command's sha256**; sha256 of any script argument |
 | `system` | governor, turbo, SMT, ASLR, hugepages, power source, thermal throttle, load, container, VM |
 | `hardware` | CPU, NUMA, GPU model/count/driver, CUDA -- **for every node of an allocation** |
 | `runtime` | MPI implementation and version, transport configuration, tuning variables |
@@ -475,7 +481,7 @@ It is the only non-captured file in `examples/`.)
 
 | harness | how it is recognised | what ceteris does |
 |---|---|---|
-| hyperfine | `hyperfine` on the command line | adds `--export-json` if absent, reads median and min |
+| hyperfine | `hyperfine` on the command line | adds `--export-json` if absent, reads median and min; records the timed commands as `execution.subject` and hashes their binaries |
 | Google Benchmark | any `--benchmark_*` flag | adds `--benchmark_out`, reads `real_time` |
 | pytest-benchmark | `pytest` with `--benchmark*` | adds `--benchmark-json`, reads medians |
 | JMH | `-rf json` | reads `-rff` output |
@@ -507,16 +513,26 @@ ceteris run --label "lci-$LCI_ATTR_PACKET_SIZE" --repo ~/hpx --cmake-cache ~/hpx
     --store ~/campaigns/collectives -- srun ./bench_all_to_all --size 4096
 ```
 
-**A pull request.** The action runs the benchmark on base and head in one job
-and fails the check unless the comparison is valid:
+**A pull request.** The action checks out the base, builds, runs the
+benchmark, does the same for the head, and fails the check unless the
+comparison is valid. Check out with the full history so both commits are
+reachable:
 
 ```yaml
+- uses: actions/checkout@v4
+  with: { fetch-depth: 0 }
 - uses: iemAnshuman/ceteris@main
   with:
+    build: cargo build --release
     command: hyperfine -N 'target/release/mytool bench.dat'
     repeats: "5"
     require-signal: "true"
 ```
+
+Without `build`, both sides run whatever binary was already in the tree. The
+record hashes the command hyperfine times, not hyperfine, and the action
+declares that hash as the thing expected to vary; when it does not, the report
+says so under *declared but did not vary*.
 
 **pytest.** `pytest --ceteris` records the session; with pytest-benchmark
 installed, its results come along.
@@ -534,8 +550,9 @@ $ ceteris doctor
 this machine: 127 fields (29 captured, 98 not applicable, 0 unknown, 0 error)
 
 WORTH KNOWING (will widen the noise floor):
-  system.power_source  battery: on battery the CPU is throttled
-  source.dirty         the working tree had uncommitted changes; the commit does not describe the code
+  source.dirty  the working tree had uncommitted changes; the commit does not describe the code
+
+Active ecosystem packs: hpc, python
 ```
 
 Three groups, and the middle one is the point:
@@ -562,6 +579,7 @@ ceteris doctor examples/rostam/het2.json
 --vary build.cxx_flags                  # exact
 --vary 'runtime.env.LCI_*'              # glob
 --vary execution.program_args           # the sweep is in the arguments; rank count still gates
+--vary execution.subject                # a harness timed a different command; its options still gate
 --waive hardware.cpu_model:"same partition, different node draw"
 --require-signal                        # exit 4 unless a metric beats the noise floor
 --strict                                # informational fields gate too
@@ -580,7 +598,8 @@ and `material` gate, `informational` is shown -- and unlisted fields gate.
 | 1 | undeclared differences, or a confound |
 | 2 | something could not be captured, or the environment changed mid-run |
 | 3 | usage |
-| 4 | valid but within noise (`--require-signal`) |
+| 4 | valid but within noise, or nothing was measured (`--require-signal`) |
+| 130 | interrupted; the benchmark was terminated |
 
 ## Configuration
 

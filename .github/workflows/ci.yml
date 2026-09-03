@@ -46,7 +46,12 @@ jobs:
           ceteris run --label hf --repeats 3 -- hyperfine -N --runs 5 --warmup 2 'python3 -c pass'
           ceteris compare --last 3 --certify
       - run: |
-          ceteris compare examples/run-tuned-O3.json examples/run-tuned-O0.json; test $? -eq 1
-          ceteris compare examples/run-tuned-O3.json examples/run-tuned-O0.json --vary build.cxx_flags --vary execution; test $? -eq 0
-          ceteris compare examples/run-a.json examples/run-b-gpu-probe-failed.json; test $? -eq 2
+          # bash runs with -e here, so a comparison that exits non-zero by
+          # design would abort the step before `test` ever saw the code.
+          # Globs, not timestamps: the pingpong records get re-recorded.
+          O3=(examples/pingpong/*-tuned-O3*.json)
+          O0=(examples/pingpong/*-tuned-O0*.json)
+          rc=0; ceteris compare "${O3[@]}" "${O0[@]}" || rc=$?; test "$rc" -eq 1
+          rc=0; ceteris compare "${O3[@]}" "${O0[@]}" --vary build.cxx_flags --vary execution || rc=$?; test "$rc" -eq 0
+          rc=0; ceteris compare examples/run-a.json examples/run-b-gpu-probe-failed.json || rc=$?; test "$rc" -eq 2
         shell: bash

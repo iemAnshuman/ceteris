@@ -101,7 +101,17 @@ def test_subjects_are_hashed_and_leave_the_harness_options_behind(tmp_path, monk
     assert fields["execution.program_args"].value == ["-N", "--runs", "5"]
     assert fields["execution.subject"].value == [f"{exe} --size 1", "sleep 0.1"]
     hashes = fields["execution.subject_sha256"].value
-    assert set(hashes) == {f"{exe} --size 1", "sleep 0.1"} and all(len(h) == 64 for h in hashes.values())
+    assert set(hashes) == {str(exe), "sleep"} and all(len(h) == 64 for h in hashes.values())
+
+
+def test_subject_hashes_are_keyed_by_executable_so_arguments_can_vary_alone(cfg):
+    """`gzip -6` against `gzip -1` is one binary; declaring that the subject
+    varies must be enough."""
+    from ceteris.model import Fingerprint
+    a = Fingerprint(execution.collect(["hyperfine", "gzip -6 -c f"], subjects=["gzip -6 -c f"]), {"label": "a"})
+    b = Fingerprint(execution.collect(["hyperfine", "gzip -1 -c f"], subjects=["gzip -1 -c f"]), {"label": "b"})
+    assert a.fields["execution.subject_sha256"].value == b.fields["execution.subject_sha256"].value
+    assert compare([a, b], vary=["execution.subject"], cfg=cfg).exit_code == EXIT_OK
 
 
 def test_a_subject_that_cannot_be_found_is_unknown():

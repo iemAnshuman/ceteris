@@ -119,7 +119,12 @@ def _subject_fields(harness: str, subjects: list[str]) -> dict[str, Field]:
     """The commands a harness runs are what the measurement is about. Each
     is shell-split, its executable resolved from the capturing host and
     hashed, and any script among its arguments hashed too. A harness
-    binary's own hash says nothing about a stale benchmark build."""
+    binary's own hash says nothing about a stale benchmark build.
+
+    Hashes are keyed by the executable as written, not by the whole command:
+    `gzip -6` and `gzip -1` are one binary, and a comparison that declares
+    the subject varies must not also have to declare that its hash did not.
+    """
     prov = f"positional commands of {harness} (heuristic option parse)"
     out: dict[str, Field] = {"execution.subject": value(list(subjects), provenance=prov)}
     hashes: dict[str, str] = {}
@@ -141,7 +146,7 @@ def _subject_fields(harness: str, subjects: list[str]) -> dict[str, Field]:
             problems.append(f"{cmd!r}: {tokens[0]} not found on disk from the capturing host")
         else:
             try:
-                hashes[cmd] = _sha256(resolved)
+                hashes[tokens[0]] = _sha256(resolved)
             except OSError as exc:
                 problems.append(f"{cmd!r}: {exc}")
         scripts.update(_scripts(tokens[1:]))

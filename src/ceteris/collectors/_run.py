@@ -59,6 +59,7 @@ def run(
             [tool, *argv[1:]],
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=timeout,
             cwd=cwd,
             check=False,

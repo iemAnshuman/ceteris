@@ -124,3 +124,19 @@ def test_informational_fields_moving_mid_run_are_not_drift(cfg, monkeypatch):
     assert runner._drift(before, after, cfg) == []
     after["source.commit"] = value("def")
     assert [c["path"] for c in runner._drift(before, after, cfg)] == ["source.commit"]
+
+
+def test_non_utf8_output_does_not_lose_the_record(cfg):
+    record = run_command(
+        [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'bandwidth 12.5 GB/s \\xff\\n')"],
+        cfg=cfg, echo=False, metric_patterns={"bw": r"bandwidth ([0-9.]+) GB/s"},
+    )
+    assert record.run["exit_code"] == 0
+    assert record.metrics["bw"].value == 12.5
+
+
+def test_a_tool_banner_outside_utf8_is_still_read():
+    from ceteris.collectors._run import run
+
+    res = run([sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'tool 1.2.3 \\xff')"])
+    assert res.ok and "1.2.3" in res.stdout

@@ -115,6 +115,9 @@ def run_command(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            # A benchmark that prints one byte outside UTF-8 must not lose
+            # its record; the tail of its output is evidence, not data.
+            errors="replace",
             bufsize=1,
         )
     except (OSError, ValueError) as exc:

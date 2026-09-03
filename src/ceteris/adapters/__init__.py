@@ -43,6 +43,19 @@ def _arg_value(argv: list[str], *names: str) -> str | None:
     return None
 
 
+def _scratch(prefix: str) -> str:
+    """A path for an export file the adapter injects.
+
+    In the system temp directory, never the working tree: the run's
+    after-capture happens while the file exists, and an untracked file in a
+    clean repository flipped source.dirty, which counted as drift and made
+    every zero-config harness run uncertifiable.
+    """
+    fd, path = tempfile.mkstemp(prefix=prefix, suffix=".json")
+    os.close(fd)
+    return path
+
+
 def _num(x: Any) -> Any:
     try:
         return float(x)
@@ -102,7 +115,7 @@ class Hyperfine(Adapter):
         out = _arg_value(argv, "--export-json")
         if out:
             return Plan(self.name, list(argv), os.path.join(cwd, out))
-        path = tempfile.mktemp(prefix="ceteris-hyperfine-", suffix=".json", dir=cwd)
+        path = _scratch("ceteris-hyperfine-")
         return Plan(self.name, list(argv) + ["--export-json", path], path, added_output=True)
 
     def collect(self, plan, stdout, cwd, started):
@@ -134,7 +147,7 @@ class GoogleBenchmark(Adapter):
         out = _arg_value(argv, "--benchmark_out")
         if out:
             return Plan(self.name, list(argv), os.path.join(cwd, out))
-        path = tempfile.mktemp(prefix="ceteris-gbench-", suffix=".json", dir=cwd)
+        path = _scratch("ceteris-gbench-")
         return Plan(self.name, list(argv) + [f"--benchmark_out={path}", "--benchmark_out_format=json"], path, True)
 
     def collect(self, plan, stdout, cwd, started):
@@ -162,7 +175,7 @@ class PytestBenchmark(Adapter):
         out = _arg_value(argv, "--benchmark-json")
         if out:
             return Plan(self.name, list(argv), os.path.join(cwd, out))
-        path = tempfile.mktemp(prefix="ceteris-pytest-", suffix=".json", dir=cwd)
+        path = _scratch("ceteris-pytest-")
         return Plan(self.name, list(argv) + [f"--benchmark-json={path}"], path, True)
 
     def collect(self, plan, stdout, cwd, started):

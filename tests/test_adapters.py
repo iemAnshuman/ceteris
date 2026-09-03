@@ -96,6 +96,8 @@ def test_detection_by_command_line():
 def test_hyperfine_plan_injects_export_when_absent(tmp_path):
     plan = adapters.Hyperfine().plan(["hyperfine", "ls"], str(tmp_path))
     assert plan.added_output and "--export-json" in plan.argv
+    assert not plan.output.startswith(str(tmp_path)), "injected exports must not land in the working tree"
+    os.unlink(plan.output)
     given = adapters.Hyperfine().plan(["hyperfine", "--export-json", "x.json", "ls"], str(tmp_path))
     assert not given.added_output and given.output.endswith("x.json")
 
@@ -117,3 +119,37 @@ def test_end_to_end_hyperfine_zero_config(cfg, tmp_path, monkeypatch):
     assert "hyperfine.median_s" in rec.metrics, rec.metrics  # single command: stable name
     assert rec.fields["execution.command"].value == "hyperfine -N --runs 3 --warmup 1 true"  # original, not augmented
     assert not list(tmp_path.glob("ceteris-hyperfine-*"))  # injected export cleaned up
+
+
+FAKE_HYPERFINE = """#!/bin/sh
+out=""
+while [ $# -gt 0 ]; do
+  if [ "$1" = "--export-json" ]; then out="$2"; shift; fi
+  shift
+done
+echo "Benchmark 1: fake"
+[ -n "$out" ] && printf '{"results":[{"command":"fake","median":0.1,"min":0.09}]}' > "$out"
+exit 0
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="shell script fake")
+def test_a_zero_config_harness_run_in_a_clean_repo_does_not_drift(cfg, tmp_path, monkeypatch):
+    """The export file the adapter injects used to be created in the
+    working tree, so the after-capture saw an untracked file, source.dirty
+    flipped, and the run was reported as drifted."""
+    import subprocess
+    from ceteris.runner import run_command
+
+    repo = tmp_path / "repo"; repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x"], cwd=repo, check=True)
+    fake = tmp_path / "bin"; fake.mkdir()
+    (fake / "hyperfine").write_text(FAKE_HYPERFINE); (fake / "hyperfine").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.chdir(repo)
+    rec = run_command(["hyperfine", "-N", "true"], cfg=cfg, echo=False, label="hf")
+    assert rec.fields["source.dirty"].value is False
+    assert rec.run["drift"] == []
+    assert rec.metrics["hyperfine.median_s"].value == 0.1
+    assert not list(repo.glob("ceteris-*"))

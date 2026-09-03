@@ -150,6 +150,18 @@ def test_a_metric_no_run_produced_says_so(cfg):
     assert "no configuration produced a value" in verdict.reason
 
 
+def test_a_multi_valued_metric_says_so(cfg):
+    """A regex matching every iteration line produced a list, which the
+    stats skipped, and the verdict then claimed no run produced a value."""
+    from ceteris.metrics import extract
+
+    m = extract("bw 10\nbw 12\nbw 11\n", {"bw": r"bw (\d+)"})
+    runs = [Fingerprint({"source.commit": value(c)}, {"label": c}, run={"exit_code": 0}, metrics=dict(m))
+            for c in ("x", "x", "x", "y", "y", "y")]
+    verdict = compare(runs, vary=["source.commit"], cfg=cfg).noise[0]
+    assert "multi-valued" in verdict.reason and "3 times" in verdict.reason
+
+
 def test_a_successful_run_is_unaffected(cfg):
     from ceteris.model import Fingerprint, value
 

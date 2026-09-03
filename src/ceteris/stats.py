@@ -131,6 +131,19 @@ def stats_for(group: ConfigGroup, metric: str) -> MetricStats | None:
 
 
 def noise_verdict(groups: Sequence[ConfigGroup], metric: str) -> NoiseVerdict:
+    counts = {
+        len(f.value)
+        for g in groups
+        for f in (fp.metrics.get(metric) for fp in g.members)
+        if f is not None and f.state is State.VALUE and isinstance(f.value, list)
+    }
+    if counts:
+        # A pattern that matched several lines. Which of them is the result
+        # is not something to guess at; it used to be reported as "no value".
+        n = ", ".join(str(c) for c in sorted(counts))
+        return NoiseVerdict(metric, None, None, False, False,
+                            f"multi-valued: the pattern matched {n} times per run; "
+                            "use a pattern that matches once, or a harness adapter")
     per = [s for s in (stats_for(g, metric) for g in groups) if s is not None]
     if not per:
         # Every sample was unknown: the pattern did not match, or the harness

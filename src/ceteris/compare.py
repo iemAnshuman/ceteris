@@ -133,6 +133,9 @@ class Report:
     require_signal: bool = False
     warnings: list[str] = field(default_factory=list)
     confounds: list[Confound] = field(default_factory=list)
+    # Identity of the severity and comparator maps this ran under. They decide
+    # which fields gate, so a verdict is only meaningful together with them.
+    config_digest: str = ""
 
     def by_class(self, *classes: Classification) -> list[FieldResult]:
         wanted = set(classes)
@@ -338,7 +341,19 @@ def compare(
         require_signal=require_signal,
         warnings=warnings,
         confounds=confounds,
+        config_digest=_config_digest(cfg),
     )
+
+
+def _config_digest(cfg: Config) -> str:
+    import hashlib
+    import json
+
+    payload = {
+        "severity": sorted(cfg.severity.items()),
+        "comparators": sorted(cfg.comparators.items()),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
 
 
 def _confounds(results: list[FieldResult]) -> list[Confound]:

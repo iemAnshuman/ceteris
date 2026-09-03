@@ -232,6 +232,7 @@ def _cmd_verify(args) -> int:
     fingerprints = [_load_fingerprint(p) for p in args.fingerprints]
     report = compare_fingerprints(
         fingerprints, vary=parsed.vary, waive=parsed.waive, cfg=cfg, strict=parsed.strict,
+        require_signal=parsed.require_signal,
     )
     ok, why = certificate.verify(args.certificate, report)
     sys.stdout.write(f"ceteris: {why}\n")

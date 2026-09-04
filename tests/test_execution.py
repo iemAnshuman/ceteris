@@ -82,3 +82,11 @@ def test_program_args_can_vary_while_launcher_args_still_gate(tmp_path, cfg):
     report = compare([a, c], vary=["execution.program_args"], cfg=cfg)
     assert report.exit_code == EXIT_UNDECLARED
     assert any(r.path == "execution.launcher_args" for r in report.violations)
+
+
+def test_hyperfine_subjects_are_the_timed_commands():
+    from ceteris.adapters import Hyperfine
+
+    argv = ["hyperfine", "-N", "--warmup", "1", "--runs", "5", "-L", "n", "1,6",
+            "gzip -{n} -c f", "--export-json", "x.json", "--style=basic", "sleep 0.1"]
+    assert Hyperfine().subject(argv) == ["gzip -{n} -c f", "sleep 0.1"]

@@ -86,6 +86,12 @@ class Adapter:
     def collect(self, plan: Plan, stdout: str, cwd: str, started: float) -> dict[str, Field]:  # pragma: no cover
         return {}
 
+    def subject(self, argv: list[str]) -> list[str] | None:
+        """The command strings the harness itself times, when the harness is
+        a wrapper around them (hyperfine); None when the program on the
+        command line is the thing being measured."""
+        return None
+
     # -- helpers -------------------------------------------------------------
     def _read_json(self, path: str | None) -> tuple[Any, str | None]:
         if not path:
@@ -106,11 +112,43 @@ def _basename(argv: list[str]) -> str:
     return os.path.basename(argv[0]) if argv else ""
 
 
+# hyperfine 1.20: options that consume the next argument(s). Anything else
+# starting with a dash is a flag, and everything else is a command to time.
+_HYPERFINE_VALUED = {
+    "-w", "--warmup", "-m", "--min-runs", "-M", "--max-runs", "-r", "--runs",
+    "-s", "--setup", "--reference", "--reference-name", "-p", "--prepare",
+    "-C", "--conclude", "-c", "--cleanup", "-D", "--parameter-step-size",
+    "-S", "--shell", "--style", "--sort", "-u", "--time-unit",
+    "--export-asciidoc", "--export-csv", "--export-json", "--export-markdown",
+    "--export-orgmode", "--output", "--input", "-n", "--command-name",
+    "--min-benchmarking-time",
+}
+_HYPERFINE_MULTI = {"-P": 3, "--parameter-scan": 3, "-L": 2, "--parameter-list": 2}
+
+
 class Hyperfine(Adapter):
     name = "hyperfine"
 
     def detect(self, argv):
         return _basename(argv) == "hyperfine"
+
+    def subject(self, argv):
+        out: list[str] = []
+        i = 1
+        while i < len(argv):
+            a = argv[i]
+            if a == "--":
+                out.extend(argv[i + 1:])
+                break
+            if a.startswith("-") and len(a) > 1:
+                if a.startswith("--") and "=" in a:
+                    i += 1
+                    continue
+                i += 1 + _HYPERFINE_MULTI.get(a, 1 if a in _HYPERFINE_VALUED else 0)
+                continue
+            out.append(a)
+            i += 1
+        return out
 
     def plan(self, argv, cwd):
         out = _arg_value(argv, "--export-json")

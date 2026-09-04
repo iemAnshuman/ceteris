@@ -144,3 +144,8 @@ def test_a_script_argument_is_hashed_like_a_binary(tmp_path, monkeypatch, cfg):
     # and inside a harness subject
     c = execution.collect(["hyperfine", f"{sys.executable} bench.py"], subjects=[f"{sys.executable} bench.py"])
     assert c["execution.subject_scripts_sha256"].value.keys() == {"bench.py"}
+
+
+def test_the_verbatim_command_keeps_its_quoting():
+    fields = execution.collect(["hyperfine", "-N", "gzip -6 -c f"])
+    assert fields["execution.command"].value == "hyperfine -N 'gzip -6 -c f'"

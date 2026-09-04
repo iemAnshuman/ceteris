@@ -171,7 +171,9 @@ def collect(argv: list[str], subjects: list[str] | None = None) -> dict[str, Fie
     strings the harness itself times; they are taken out of
     execution.program_args, which then holds only the harness's options."""
     out: dict[str, Field] = {
-        "execution.command": value(" ".join(argv), provenance="wrapped command line"),
+        # shlex.join, so `hyperfine 'gzip -6 -c f'` is recorded as typed and
+        # not flattened into tokens nobody can re-run.
+        "execution.command": value(shlex.join(argv), provenance="wrapped command line"),
         "execution.workdir": value(os.getcwd(), provenance="os.getcwd()"),
     }
     launcher, largs, program, pargs = split(argv)

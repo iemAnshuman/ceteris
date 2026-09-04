@@ -23,6 +23,13 @@ import shutil
 
 from .model import Field, not_applicable, unknown, value
 
+# Arguments that are source code rather than data. A stale `bench.py` is the
+# interpreted world's stale build, and hashing the interpreter never sees it.
+_SCRIPT_EXTENSIONS = (
+    ".py", ".js", ".mjs", ".ts", ".rb", ".pl", ".sh", ".bash", ".zsh",
+    ".lua", ".jl", ".r", ".tcl", ".php",
+)
+
 LAUNCHERS = {
     "mpirun", "mpiexec", "mpiexec.hydra", "srun", "jsrun", "aprun", "prun",
     "orterun", "prterun", "flux",
@@ -81,6 +88,30 @@ def _sha256(path: str) -> str:
     return h.hexdigest()
 
 
+def _scripts(args: list[str]) -> dict[str, str]:
+    """sha256 of every argument that is an existing script file."""
+    found: dict[str, str] = {}
+    for a in args:
+        if a.lower().endswith(_SCRIPT_EXTENSIONS) and os.path.isfile(a):
+            try:
+                found[a] = _sha256(a)
+            except OSError:
+                continue
+    return found
+
+
+def _scripts_field(args: list[str], what: str) -> Field:
+    scripts = _scripts(args)
+    if scripts:
+        return value(scripts, provenance=f"sha256 of script files among the {what}")
+    return not_applicable(f"no script file among the {what}", provenance=what)
+
+
+def _resolve(exe: str) -> str | None:
+    resolved = exe if os.sep in exe else shutil.which(exe)
+    return resolved if resolved and os.path.isfile(resolved) else None
+
+
 def collect(argv: list[str]) -> dict[str, Field]:
     out: dict[str, Field] = {
         "execution.command": value(" ".join(argv), provenance="wrapped command line"),
@@ -102,13 +133,15 @@ def collect(argv: list[str]) -> dict[str, Field]:
         out["execution.program"] = unknown("could not identify the program", provenance=prov)
         out["execution.program_args"] = unknown("could not identify the program", provenance=prov)
         out["execution.program_sha256"] = unknown("could not identify the program", provenance=prov)
+        out["execution.program_scripts_sha256"] = unknown("could not identify the program", provenance=prov)
         return out
     out["execution.program"] = value(program, provenance=prov)
     out["execution.program_args"] = value(pargs, provenance=prov)
+    out["execution.program_scripts_sha256"] = _scripts_field(pargs, "program arguments")
 
-    resolved = program if os.sep in program else shutil.which(program)
+    resolved = _resolve(program)
     hprov = f"sha256 of {resolved or program}"
-    if resolved and os.path.isfile(resolved):
+    if resolved:
         try:
             out["execution.program_sha256"] = value(_sha256(resolved), provenance=hprov)
         except OSError as exc:

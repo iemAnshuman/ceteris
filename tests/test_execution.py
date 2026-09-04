@@ -90,3 +90,16 @@ def test_hyperfine_subjects_are_the_timed_commands():
     argv = ["hyperfine", "-N", "--warmup", "1", "--runs", "5", "-L", "n", "1,6",
             "gzip -{n} -c f", "--export-json", "x.json", "--style=basic", "sleep 0.1"]
     assert Hyperfine().subject(argv) == ["gzip -{n} -c f", "sleep 0.1"]
+
+
+def test_a_script_argument_is_hashed_like_a_binary(tmp_path, monkeypatch, cfg):
+    """`python bench.py`: hashing python never sees a changed bench.py."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "bench.py").write_text("x = 1\n")
+    from ceteris.model import Fingerprint
+    a = Fingerprint(execution.collect([sys.executable, "bench.py"]), {"label": "a"})
+    assert a.fields["execution.program_scripts_sha256"].value.keys() == {"bench.py"}
+    (tmp_path / "bench.py").write_text("x = 2\n")
+    b = Fingerprint(execution.collect([sys.executable, "bench.py"]), {"label": "b"})
+    report = compare([a, b], cfg=cfg)
+    assert {r.path for r in report.violations} == {"execution.program_scripts_sha256"}

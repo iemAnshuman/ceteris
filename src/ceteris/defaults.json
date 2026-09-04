@@ -47,6 +47,7 @@
     "execution.launcher_args": "critical",
     "execution.program": "critical",
     "execution.program_args": "critical",
+    "execution.program_scripts_sha256": "critical",
     "execution.program_sha256": "critical",
     "execution.workdir": "informational",
     "hardware.*": "material",

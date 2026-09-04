@@ -108,8 +108,12 @@ def test_subject_hashes_are_keyed_by_executable_so_arguments_can_vary_alone(cfg)
     """`gzip -6` against `gzip -1` is one binary; declaring that the subject
     varies must be enough."""
     from ceteris.model import Fingerprint
-    a = Fingerprint(execution.collect(["hyperfine", "gzip -6 -c f"], subjects=["gzip -6 -c f"]), {"label": "a"})
-    b = Fingerprint(execution.collect(["hyperfine", "gzip -1 -c f"], subjects=["gzip -1 -c f"]), {"label": "b"})
+    # sys.executable stands in for the harness binary: the runners have no
+    # hyperfine, and an unhashable harness would make the comparison
+    # indeterminate for a reason unrelated to what this test is about.
+    harness = sys.executable
+    a = Fingerprint(execution.collect([harness, "gzip -6 -c f"], subjects=["gzip -6 -c f"]), {"label": "a"})
+    b = Fingerprint(execution.collect([harness, "gzip -1 -c f"], subjects=["gzip -1 -c f"]), {"label": "b"})
     assert a.fields["execution.subject_sha256"].value == b.fields["execution.subject_sha256"].value
     assert compare([a, b], vary=["execution.subject"], cfg=cfg).exit_code == EXIT_OK
 
@@ -132,9 +136,10 @@ def test_a_rebuilt_subject_is_caught_although_the_harness_did_not_change(tmp_pat
     exe = tmp_path / "tool"
     exe.write_text("#!/bin/sh\necho v1\n"); exe.chmod(0o755)
     from ceteris.model import Fingerprint
-    a = Fingerprint(execution.collect(["hyperfine", "-N", str(exe)], subjects=[str(exe)]), {"label": "a"})
+    harness = sys.executable
+    a = Fingerprint(execution.collect([harness, "-N", str(exe)], subjects=[str(exe)]), {"label": "a"})
     exe.write_text("#!/bin/sh\necho v2\n")
-    b = Fingerprint(execution.collect(["hyperfine", "-N", str(exe)], subjects=[str(exe)]), {"label": "b"})
+    b = Fingerprint(execution.collect([harness, "-N", str(exe)], subjects=[str(exe)]), {"label": "b"})
     report = compare([a, b], cfg=cfg)
     assert report.exit_code == EXIT_UNDECLARED
     assert {r.path for r in report.violations} == {"execution.subject_sha256"}

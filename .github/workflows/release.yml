@@ -40,6 +40,10 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A version already uploaded by hand is not a failure; the GitHub
+          # release step behind this one should still run.
+          skip-existing: true
 
   github-release:
     needs: pypi

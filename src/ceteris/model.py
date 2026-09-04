@@ -21,7 +21,7 @@ from dataclasses import dataclass, field as dcfield
 from enum import Enum
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class State(str, Enum):

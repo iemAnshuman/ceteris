@@ -23,7 +23,7 @@ from .compare import Report, compare
 from .config import Config
 from .model import Field, Fingerprint, State
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 def __getattr__(name: str):
     # capture is resolved lazily so that `from ceteris import compare` does not

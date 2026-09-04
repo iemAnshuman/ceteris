@@ -1,0 +1,66 @@
+name: release
+
+# Pushing a tag v0.3.0 builds the sdist and wheel from that tag, publishes
+# them to PyPI through trusted publishing (no token stored anywhere), and
+# opens a GitHub release with the files attached. One-time setup on PyPI:
+# project ceteris -> Publishing -> add GitHub publisher with owner
+# iemAnshuman, repository ceteris, workflow release.yml, environment pypi.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -q build twine
+      - name: The tag must match the version in the package
+        run: |
+          v=$(python -c "import re,pathlib; print(re.search(r'__version__ = \"(.+)\"', pathlib.Path('src/ceteris/__init__.py').read_text()).group(1))")
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} but __version__ is $v"; exit 1; }
+      - run: python -m build && python -m twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Release notes are the changelog section for this version
+        run: |
+          python3 - "${GITHUB_REF_NAME#v}" > notes.md <<'PY'
+          import re, sys
+          version = sys.argv[1]
+          text = open("CHANGELOG.md").read()
+          m = re.search(r"^## " + re.escape(version) + r"[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+          print(m.group(1).strip() if m else f"ceteris {version}")
+          PY
+      - run: gh release create "${GITHUB_REF_NAME}" dist/* --title "ceteris ${GITHUB_REF_NAME#v}" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

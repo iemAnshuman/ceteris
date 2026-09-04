@@ -24,7 +24,7 @@ Named for *ceteris paribus*: all other things being equal.
 pip install ceteris        # or: pipx install ceteris, or: uv tool install ceteris
 ```
 
-Python 3.9+. No runtime dependencies.
+Python 3.9+ on Linux or macOS. No runtime dependencies.
 
 ## Quickstart
 

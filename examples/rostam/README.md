@@ -17,6 +17,7 @@ container and multi-node path in ceteris was fixture-only until these.
 | `apptainer.json` | inside a `.sif` on `diablo` | **container identity** |
 | `v0.3-mpi-2node-run.json` | `medusa00,01`, 2026-09-04 | the 0.3.0 record format: `ceteris run --repeats 3` across 2 nodes, schema 3, certificate v2 issued and verified in the job |
 | `v0.3-amd-mi100.json` | `kamand1`, 2026-09-04 | the 0.3.0 GPU probe order on the MI100 node: still 2x MI100, driver 6.12.12, no unknowns |
+| `v0.3-cuda-v100.json` | `bahram`, `cuda-V100`, 2026-09-04 | the NVIDIA path under enforced GPU GRES: one V100-PCIE allocated, one reported |
 
 ## What these caught
 

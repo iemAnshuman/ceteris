@@ -635,7 +635,7 @@ harnesses can emit it directly.
 
 Beta. Every collector path that matters has run on real hardware, and the
 paths 0.3.0 changed were run again on the cluster before release. CI covers
-Ubuntu and macOS on Python 3.9 through 3.14. Twelve records captured on
+Ubuntu and macOS on Python 3.9 through 3.14. Thirteen records captured on
 **LSU's Rostam cluster** are committed under [`examples/rostam/`](examples/rostam/),
 each verified against ground truth taken in the same job:
 

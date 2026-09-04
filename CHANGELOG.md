@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2026-09-04)
 
 Fixes found by reviewing every path the tool can fail open on. Each shipped
 with a regression test.

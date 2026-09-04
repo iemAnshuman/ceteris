@@ -92,7 +92,7 @@ def _results_table(report: Report) -> list[str]:
             lines.append(f"  {g.label:<14} n={g.n:<3} exit={','.join(str(c) for c in sorted(codes, key=str))}")
         lines.append("")
         return lines
-    w = max(len(g.label) for g in configs)
+    w = max([len(g.label) for g in configs] + [len("configuration")])
     lines.append(f"  {'configuration':<{w}}  {'n':>3}  {'metric':<16} {'min':>10} {'median':>10} {'max':>10} {'spread':>7}")
     for g in configs:
         for name in names:

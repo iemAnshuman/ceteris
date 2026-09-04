@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
+import shlex
 import shutil
 
 from .model import Field, not_applicable, unknown, value
@@ -29,6 +31,7 @@ _SCRIPT_EXTENSIONS = (
     ".py", ".js", ".mjs", ".ts", ".rb", ".pl", ".sh", ".bash", ".zsh",
     ".lua", ".jl", ".r", ".tcl", ".php",
 )
+_ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 LAUNCHERS = {
     "mpirun", "mpiexec", "mpiexec.hydra", "srun", "jsrun", "aprun", "prun",
@@ -112,7 +115,61 @@ def _resolve(exe: str) -> str | None:
     return resolved if resolved and os.path.isfile(resolved) else None
 
 
-def collect(argv: list[str]) -> dict[str, Field]:
+def _subject_fields(harness: str, subjects: list[str]) -> dict[str, Field]:
+    """The commands a harness runs are what the measurement is about. Each
+    is shell-split, its executable resolved from the capturing host and
+    hashed, and any script among its arguments hashed too. A harness
+    binary's own hash says nothing about a stale benchmark build."""
+    prov = f"positional commands of {harness} (heuristic option parse)"
+    out: dict[str, Field] = {"execution.subject": value(list(subjects), provenance=prov)}
+    hashes: dict[str, str] = {}
+    scripts: dict[str, str] = {}
+    problems: list[str] = []
+    for cmd in subjects:
+        try:
+            tokens = shlex.split(cmd)
+        except ValueError as exc:
+            problems.append(f"{cmd!r}: {exc}")
+            continue
+        while tokens and _ENV_ASSIGNMENT.match(tokens[0]):
+            tokens.pop(0)
+        if not tokens:
+            problems.append(f"{cmd!r}: no executable")
+            continue
+        resolved = _resolve(tokens[0])
+        if resolved is None:
+            problems.append(f"{cmd!r}: {tokens[0]} not found on disk from the capturing host")
+        else:
+            try:
+                hashes[cmd] = _sha256(resolved)
+            except OSError as exc:
+                problems.append(f"{cmd!r}: {exc}")
+        scripts.update(_scripts(tokens[1:]))
+    out["execution.subject_sha256"] = (
+        unknown("; ".join(problems), provenance=f"sha256 of each subject's executable ({prov})")
+        if problems
+        else value(hashes, provenance=f"sha256 of each subject's executable ({prov})")
+    )
+    out["execution.subject_scripts_sha256"] = (
+        value(scripts, provenance="sha256 of script files among the subjects' arguments")
+        if scripts
+        else not_applicable("no script file among the subjects' arguments", provenance="subjects")
+    )
+    return out
+
+
+def _no_subject(why: str) -> dict[str, Field]:
+    return {
+        "execution.subject": not_applicable(why, provenance="harness adapter"),
+        "execution.subject_sha256": not_applicable(why, provenance="harness adapter"),
+        "execution.subject_scripts_sha256": not_applicable(why, provenance="harness adapter"),
+    }
+
+
+def collect(argv: list[str], subjects: list[str] | None = None) -> dict[str, Field]:
+    """`subjects`, when a harness adapter supplies them, are the command
+    strings the harness itself times; they are taken out of
+    execution.program_args, which then holds only the harness's options."""
     out: dict[str, Field] = {
         "execution.command": value(" ".join(argv), provenance="wrapped command line"),
         "execution.workdir": value(os.getcwd(), provenance="os.getcwd()"),
@@ -134,9 +191,21 @@ def collect(argv: list[str]) -> dict[str, Field]:
         out["execution.program_args"] = unknown("could not identify the program", provenance=prov)
         out["execution.program_sha256"] = unknown("could not identify the program", provenance=prov)
         out["execution.program_scripts_sha256"] = unknown("could not identify the program", provenance=prov)
+        out.update(_no_subject("could not identify the program"))
         return out
     out["execution.program"] = value(program, provenance=prov)
-    out["execution.program_args"] = value(pargs, provenance=prov)
+    if subjects:
+        remaining = list(pargs)
+        for subject in subjects:
+            if subject in remaining:
+                remaining.remove(subject)
+        out["execution.program_args"] = value(
+            remaining, provenance=f"{prov}; the harness's own options, the timed commands are in execution.subject"
+        )
+        out.update(_subject_fields(os.path.basename(program), subjects))
+    else:
+        out["execution.program_args"] = value(pargs, provenance=prov)
+        out.update(_no_subject("no harness adapter; the program itself is the subject"))
     out["execution.program_scripts_sha256"] = _scripts_field(pargs, "program arguments")
 
     resolved = _resolve(program)

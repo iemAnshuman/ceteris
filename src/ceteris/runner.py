@@ -152,7 +152,7 @@ def run_command(
     after = capture(label=label, **kwargs)
 
     fields = dict(before.fields)
-    fields.update(execution.collect(command))
+    fields.update(execution.collect(command, subjects=chosen.subject(command) if chosen else None))
 
     truncated = len(output) > MAX_OUTPUT
     record: dict[str, Any] = {

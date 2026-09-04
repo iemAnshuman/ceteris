@@ -166,3 +166,6 @@ def test_a_zero_config_harness_run_in_a_clean_repo_does_not_drift(cfg, tmp_path,
     assert rec.run["drift"] == []
     assert rec.metrics["hyperfine.median_s"].value == 0.1
     assert not list(repo.glob("ceteris-*"))
+    assert rec.fields["execution.subject"].value == ["true"]
+    assert rec.fields["execution.program_args"].value == ["-N"]
+    assert len(rec.fields["execution.subject_sha256"].value["true"]) == 64

@@ -28,8 +28,13 @@ jobs:
           name: dist
           path: dist/
 
+  # Publishing from CI needs a trusted publisher configured on PyPI. Until
+  # the repository variable PYPI_TRUSTED_PUBLISHING is set to true, the
+  # release is uploaded by hand and this job is skipped rather than failing
+  # the run on an authentication it was never given.
   pypi:
     needs: build
+    if: vars.PYPI_TRUSTED_PUBLISHING == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -46,7 +51,10 @@ jobs:
           skip-existing: true
 
   github-release:
-    needs: pypi
+    # After the PyPI job whenever it runs, but not dependent on it: a
+    # release uploaded by hand still deserves its release page.
+    needs: [build, pypi]
+    if: always() && needs.build.result == 'success' && needs.pypi.result != 'failure'
     runs-on: ubuntu-latest
     permissions:
       contents: write

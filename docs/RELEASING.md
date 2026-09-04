@@ -31,8 +31,26 @@ channel wraps that sdist. Nothing is built by hand.
 
 One-time setup on PyPI: project `ceteris`, *Publishing*, add a GitHub
 publisher with owner `iemAnshuman`, repository `ceteris`, workflow
-`release.yml`, environment `pypi`. After that the account token on this
-laptop can be deleted.
+`release.yml`, environment `pypi`, then set the repository variable
+`PYPI_TRUSTED_PUBLISHING` to `true` so the publish job stops being skipped.
+After that the account token on this laptop can be deleted.
+
+Until then the upload is done by hand from the tag:
+
+```sh
+git clone . /tmp/rel && cd /tmp/rel && git checkout v0.3.0
+python -m build && twine check dist/* && twine upload dist/*
+gh release upload v0.3.0 dist/* --clobber
+```
+
+The last line matters. The workflow attaches artifacts it built itself, and
+two builds of one tag differ in their archive timestamps, so the release
+page would otherwise offer files that are not the ones on PyPI. For a tool
+about comparing like with like, the release assets and the PyPI files are
+the same bytes.
+
+`v0.3.0` was released this way on 2026-09-04; sdist sha256
+`f301e7a5ab746dec98307fce30d1096b063a70671b00eba98de59b88c0da0484`.
 
 ## What users run to update
 

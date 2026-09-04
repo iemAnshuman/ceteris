@@ -118,7 +118,7 @@ Canonicalisation is per comparator (`scalar`, `flagset`, `version`, `path`,
 `-march=*`, ...) repeats; otherwise order is significant.
 
 Severity: `critical` and `material` gate; `informational` is reported. The
-shipped map is in `defaults.toml`; unlisted paths are `material`.
+shipped map is in `defaults.json`; unlisted paths are `material`.
 
 Exit codes: `0` valid · `1` undeclared difference · `2` indeterminate,
 drift or a failed run · `3` usage · `4` within noise, or nothing measured

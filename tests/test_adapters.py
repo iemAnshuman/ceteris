@@ -104,6 +104,8 @@ def test_detection_by_command_line():
     assert adapters.detect(["mpirun", "-n", "2", "./osu_bw"]).name == "osu"
     assert adapters.detect(["./all_reduce_perf", "-b", "8"]).name == "nccl"
     assert adapters.detect(["python", "-c", "pass"]) is None
+    assert adapters.detect(["/home/u/mlperf-work/bench", "--size", "1"]) is None
+    assert adapters.detect(["python3", "run_mlperf.py"]).name == "mlperf"
 
 
 def test_hyperfine_plan_injects_export_when_absent(tmp_path):

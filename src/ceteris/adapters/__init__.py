@@ -322,7 +322,10 @@ class MLPerf(Adapter):
     name = "mlperf"
 
     def detect(self, argv):
-        return any("mlperf" in a.lower() or "loadgen" in a.lower() for a in argv)
+        # On the file names, not the whole paths: a benchmark checked out
+        # under ~/mlperf-work/ is not an MLPerf run.
+        names = [os.path.basename(a).lower() for a in argv]
+        return any("mlperf" in n or "loadgen" in n for n in names)
 
     def collect(self, plan, stdout, cwd, started):
         candidates = [p for p in glob.glob(os.path.join(cwd, "**", "mlperf_log_summary.txt"), recursive=True)

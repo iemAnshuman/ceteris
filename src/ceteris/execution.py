@@ -212,7 +212,7 @@ def collect(argv: list[str], subjects: list[str] | None = None) -> dict[str, Fie
         out.update(_subject_fields(os.path.basename(program), subjects))
     else:
         out["execution.program_args"] = value(pargs, provenance=prov)
-        out.update(_no_subject("no harness adapter; the program itself is the subject"))
+        out.update(_no_subject("the program on the command line is the subject"))
     out["execution.program_scripts_sha256"] = _scripts_field(pargs, "program arguments")
 
     resolved = _resolve(program)

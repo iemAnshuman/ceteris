@@ -453,6 +453,24 @@ def test_failing_nvidia_smi_with_a_driver_loaded_is_still_unknown(monkeypatch, c
     assert out["hardware.gpu_models"].state is State.UNKNOWN
 
 
+def test_no_devices_with_a_driver_loaded_names_the_likely_cause(monkeypatch, ctx):
+    """Recorded on Rostam's cuda-V100 partition, 2026-09-04: a job without
+    --gres sees a loaded driver and no device. Unknown is right; "exit 6"
+    was not a reason."""
+    def no_devices(argv, **kw):
+        if argv[0] == "nvidia-smi":
+            return _run.CmdResult(argv=argv, ok=False, missing=False, detail="exit 6: No devices were found",
+                                  stdout="No devices were found\n")
+        return missing(argv)
+
+    monkeypatch.setattr(hw_col, "run", no_devices)
+    monkeypatch.setattr(hw_col, "_gpu_driver_evidence", lambda: ["NVIDIA kernel driver"])
+    out = {}
+    hw_col._gpu(out)
+    assert out["hardware.gpu_models"].state is State.UNKNOWN
+    assert "--gres" in out["hardware.gpu_models"].detail
+
+
 def test_a_hung_nvidia_smi_stays_unknown_even_without_a_driver(monkeypatch, ctx):
     """A timeout tells us nothing either way. Only a clean non-zero exit with
     no driver loaded is evidence that there is no GPU."""

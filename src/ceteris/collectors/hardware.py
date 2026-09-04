@@ -117,8 +117,18 @@ def _nvidia(out: dict[str, Field]) -> str:
                     provenance=res.provenance,
                 )
             return "absent"
+        detail = res.detail
+        if "No devices were found" in (res.stderr or "") + (res.stdout or ""):
+            # Seen on Rostam's cuda-V100 partition: the driver is loaded but
+            # the job asked for no GPU, so the cgroup shows it none. The
+            # record is right to be unknown; the reader deserves the reason.
+            detail = (
+                "nvidia-smi found no devices although the NVIDIA driver is loaded; "
+                "under a scheduler this usually means the job was allocated no GPU "
+                "(Slurm: --gres=gpu:N)"
+            )
         for key in _GPU_FIELDS:
-            out[f"hardware.{key}"] = unknown(res.detail, provenance=res.provenance)
+            out[f"hardware.{key}"] = unknown(detail, provenance=res.provenance)
         return "hung" if res.timed_out else "failed"
     rows = [r.strip() for r in res.stdout.splitlines() if r.strip()]
     models, drivers = [], set()

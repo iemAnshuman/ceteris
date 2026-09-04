@@ -280,6 +280,14 @@ def _cmd_run(args) -> int:
                 f"({len(record.drift)} field(s)); this run is not certifiable\n"
             )
         worst = max(worst, int(record.run.get("exit_code", 0)))
+    if not any(r.metrics for r in records):
+        # The environment is recorded either way, but a first-time user who
+        # printed a number and got no measurement should be told why.
+        sys.stderr.write(
+            "ceteris: no metric was extracted: no harness was recognised and no "
+            "--metric NAME=REGEX was given. The run is recorded with its "
+            "environment only.\n"
+        )
     # The wrapped command's exit code is passed through so that wrapping a
     # benchmark in ceteris does not change how a surrounding script behaves.
     return worst

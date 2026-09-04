@@ -208,3 +208,12 @@ def test_output_with_repeats_writes_one_readable_record_per_file(tmp_path, monke
     assert written == ["rec-2.json", "rec-3.json", "rec.json"]
     for p in tmp_path.glob("rec*.json"):
         assert Fingerprint.from_json(json.loads(p.read_text())).meta["kind"] == "run"
+
+
+def test_a_run_without_any_metric_says_so(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    main(["run", "--no-store", "-q", "--", sys.executable, "-c", "print('throughput 12.5 MB/s')"])
+    assert "no metric was extracted" in capsys.readouterr().err
+    main(["run", "--no-store", "-q", "--metric", "tp=throughput ([0-9.]+)", "--",
+          sys.executable, "-c", "print('throughput 12.5 MB/s')"])
+    assert "no metric was extracted" not in capsys.readouterr().err

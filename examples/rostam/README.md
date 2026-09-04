@@ -1,4 +1,4 @@
-# Records captured on LSU's Rostam cluster, 2026-08-28/29
+# Records captured on LSU's Rostam cluster, 2026-08-28/29 and 2026-09-04
 
 Real fingerprints from a real Slurm cluster. Every Linux, Slurm, CUDA, ROCm,
 container and multi-node path in ceteris was fixture-only until these.
@@ -15,6 +15,8 @@ container and multi-node path in ceteris was fixture-only until these.
 | `cmake-cache.json` | `medusa` | a real `CMakeCache.txt` from an existing build tree |
 | `cuda-v100.json` | `diablo` | `nvcc` / CUDA runtime 12.8 |
 | `apptainer.json` | inside a `.sif` on `diablo` | **container identity** |
+| `v0.3-mpi-2node-run.json` | `medusa00,01`, 2026-09-04 | the 0.3.0 record format: `ceteris run --repeats 3` across 2 nodes, schema 3, certificate v2 issued and verified in the job |
+| `v0.3-amd-mi100.json` | `kamand1`, 2026-09-04 | the 0.3.0 GPU probe order on the MI100 node: still 2x MI100, driver 6.12.12, no unknowns |
 
 ## What these caught
 
@@ -58,3 +60,14 @@ hardware.gpu_driver         580.65.06          (identical on 2 nodes)
 
 Ground truth for every record was taken in the same job with `srun
 nvidia-smi`, `rocm-smi`, `nproc` and `mpirun --version`.
+
+## 2026-09-04: re-validation before 0.3.0
+
+Every code path 0.3.0 changed was run again on the cluster before the
+release: the two-node fan-out and merge (0 unknown fields, `hardware.node_count`
+2, both hostnames), the repeats and noise floor, the version 2 certificate
+(issued and verified inside the job), script hashing, and the AMD probe order.
+A capture on the `cuda-V100` partition without `--gres=gpu` came back with
+every GPU field unknown: the driver was loaded and `nvidia-smi` saw no device,
+because the job had been allocated none. That is the right answer, and the
+record now says so in words rather than as `exit 6`.

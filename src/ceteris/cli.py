@@ -137,6 +137,36 @@ def _build_parser() -> argparse.ArgumentParser:
     cmp_.add_argument("--certify", action="store_true",
                       help="append a one-line certificate that `ceteris verify` can check")
 
+    pln = sub.add_parser(
+        "plan", help="resolve an authored experiment into an immutable plan")
+    pln.add_argument("experiment", help="the authored experiment JSON")
+    pln.add_argument("--profile", help="profile JSON to resolve against")
+    pln.add_argument("--revision", action="append", default=[], metavar="VARIANT=COMMIT",
+                     help="the full commit a variant resolves to. Repeatable.")
+    pln.add_argument("-o", "--output", help="write the resolved plan here")
+
+    mig = sub.add_parser(
+        "migrate", help="read a legacy record into the schema 4 shape, without adding evidence")
+    mig.add_argument("record", help="a schema 2 or 3 record")
+    mig.add_argument("-o", "--output", help="write the derivative record here")
+    mig.add_argument("--json", action="store_true", help="machine-readable limitations")
+
+    bun = sub.add_parser("bundle", help="create and check offline evidence bundles")
+    bunsub = bun.add_subparsers(dest="bundle_command", required=True)
+    bver = bunsub.add_parser("verify", help="check a bundle against its receipt, offline")
+    bver.add_argument("directory", help="the bundle directory")
+    bver.add_argument("receipt", help="the ceteris-receipt line, quoted")
+    bver.add_argument("--require-pass", action="store_true",
+                      help="also require that the comparison itself passed")
+    bver.add_argument("--require-level", choices=("records_only", "evidence_complete",
+                                                  "reproduction_ready"),
+                      help="the minimum availability level this use needs")
+    bver.add_argument("--json", action="store_true", help="machine-readable result")
+    binsp = bunsub.add_parser("inspect", help="list what a bundle contains")
+    binsp.add_argument("directory", help="the bundle directory")
+    binsp.add_argument("--disclosure", action="store_true",
+                       help="show what the bundle may reveal about the machine it ran on")
+
     ver = sub.add_parser("verify", help="check a certificate line against its records")
     ver.add_argument("certificate", help="the ceteris-certified line, quoted")
     ver.add_argument("fingerprints", nargs="+", help="the record files the certificate covers")
@@ -353,6 +383,109 @@ def _cmd_doctor(args) -> int:
     return doctor.exit_code(findings)
 
 
+def _cmd_plan(args) -> int:
+    import json as _json
+
+    from . import experiment as experiment_mod
+
+    document = _json.loads(Path(args.experiment).read_text(encoding="utf-8"))
+    profile = (_json.loads(Path(args.profile).read_text(encoding="utf-8"))
+               if args.profile else {"id": "diagnostic", "version": 1})
+    revisions = {}
+    for item in args.revision:
+        name, _, commit = item.partition("=")
+        if not commit:
+            raise ValueError(f"--revision {item!r} must look like VARIANT=COMMIT")
+        revisions[name] = commit
+
+    problems = experiment_mod.validate_authored(document)
+    if problems:
+        for problem in problems:
+            sys.stderr.write(f"ceteris: {problem}\n")
+        return EXIT_USAGE
+
+    plan = experiment_mod.resolve(document, profile=profile, revisions=revisions)
+    text = _json.dumps(plan.to_json(), indent=2, sort_keys=True) + "\n"
+    if args.output:
+        Path(args.output).write_text(text, encoding="utf-8")
+        sys.stderr.write(f"ceteris: plan {plan.digest}\n")
+        sys.stderr.write(f"ceteris: {len(plan.schedule)} executions in "
+                         f"{len(plan.body['comparisons'])} comparison(s)\n")
+    else:
+        sys.stdout.write(text)
+    return EXIT_OK
+
+
+def _cmd_migrate(args) -> int:
+    import json as _json
+
+    from . import migration as migration_mod
+
+    source = _json.loads(Path(args.record).read_text(encoding="utf-8"))
+    migrated = migration_mod.migrate(source)
+    if args.json:
+        sys.stdout.write(_json.dumps(
+            {"record": migrated.record,
+             "limitations": [l.to_json() for l in migrated.limitations]},
+            indent=2, sort_keys=True) + "\n")
+        return EXIT_OK
+    if args.output:
+        Path(args.output).write_text(
+            _json.dumps(migrated.record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    else:
+        sys.stdout.write(_json.dumps(migrated.record, indent=2, sort_keys=True) + "\n")
+    sys.stderr.write(
+        "ceteris: this is a derivative record. Migration cannot add evidence the "
+        "original never carried:\n")
+    for limitation in migrated.limitations:
+        sys.stderr.write(f"  {limitation.code}: {limitation.detail}\n")
+    return EXIT_OK
+
+
+def _cmd_bundle(args) -> int:
+    import json as _json
+
+    from . import bundle as bundle_mod
+
+    if args.bundle_command == "inspect":
+        manifest = _json.loads(
+            (Path(args.directory) / "manifest.json").read_text(encoding="utf-8"))
+        sys.stdout.write(f"{manifest['kind']} schema {manifest['schema_version']}, "
+                         f"{manifest['availability_level']}\n")
+        sys.stdout.write(f"  canonicalization: {manifest['canonicalization']}\n")
+        sys.stdout.write(f"  producer authentication: "
+                         f"{manifest.get('producer_authentication', 'none')}\n")
+        for entry in manifest["files"]:
+            sys.stdout.write(f"  {entry['role']:<11} {entry['bytes']:>9}  {entry['path']}\n")
+        for entry in manifest.get("omitted") or []:
+            sys.stdout.write(f"  omitted     {entry.get('path')}: {entry.get('reason')}\n")
+        if args.disclosure:
+            sys.stdout.write(
+                "\nDisclosure: command lines, output tails, source paths, host names and\n"
+                "artifact names in this bundle may carry information about the machine\n"
+                "it ran on. Review them before sharing it.\n")
+        return EXIT_OK
+
+    result = bundle_mod.verify(args.directory, args.receipt,
+                               require_pass=args.require_pass,
+                               required_level=args.require_level)
+    if args.json:
+        sys.stdout.write(_json.dumps(result.to_json(), indent=2, sort_keys=True) + "\n")
+    else:
+        sys.stdout.write(
+            f"ceteris: integrity {'verified' if result.integrity else 'FAILED'}"
+            + (f", result {result.acceptance}" if result.acceptance else "") + "\n")
+        for problem in result.problems:
+            sys.stdout.write(f"  {problem}\n")
+        for note in result.notes:
+            sys.stdout.write(f"  note: {note}\n")
+    if not result.integrity:
+        return EXIT_INTEGRITY
+    if result.problems:
+        return EXIT_UNDECLARED
+    return EXIT_OK
+
+
 def _cmd_list(args) -> int:
     store = store_mod.store_path(args.store)
     paths = store_mod.all_runs(store)
@@ -400,6 +533,9 @@ def main(argv: list[str] | None = None) -> int:
         "doctor": _cmd_doctor,
         "compare": _cmd_compare,
         "verify": _cmd_verify,
+        "plan": _cmd_plan,
+        "migrate": _cmd_migrate,
+        "bundle": _cmd_bundle,
     }[args.subcommand]
     try:
         return handler(args)

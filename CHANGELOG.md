@@ -77,6 +77,57 @@ and metric observations, and a strict validator that reports structured
 issues with stable codes instead of raising. Nothing reads or writes schema
 4 yet; `ceteris run` still produces schema 3.
 
+### The protocol, built alongside the shipped format (WP03 to WP11, WP15)
+
+None of this replaces schema 3 yet. `ceteris run` still writes schema 3, and
+`compare` still evaluates it. What exists now is the machinery the planned
+flow needs, each piece pure and separately testable:
+
+- **`ceteris.protocol`** — the canonical encoding `ceteris-json-v1` with byte
+  vectors frozen in a fixture, exact decimals and rationals, schema 4 typed
+  values, and a validator that reports structured issues instead of raising.
+- **`identity`** — artifact manifests by content rather than metadata,
+  source snapshots that hash bytes rather than record a dirty flag, and
+  command identity where two worktrees of one experiment are not a workload
+  difference while a different input still is.
+- **`policy`** — rules with explicit integer priority, so source order never
+  decides and a tie is an error; `typed-exact@1` and `multiset@1`; waivers
+  that need a reason and a reference and cannot reach a malformed record, a
+  duplicate execution, an invalid harness result, a failed check or a broken
+  receipt.
+- **`coverage`** — expected evidence from the frozen plan, never from the
+  records that happened to arrive, with three-valued conditions where an
+  unreadable input is unresolved and never quietly false.
+- **`experiment`** — an authored experiment frozen into an immutable plan,
+  with a schedule generated from a documented digest rather than a language's
+  random number generator, so another implementation schedules identically.
+  Amendments create a new lineage labelled retrospective.
+- **`analysis`** — `descriptive@1`, and `paired-median-relative@1` as the
+  reference inferential method: exact rational pair effects, a
+  distribution-free order-statistic interval, and non-regression,
+  improvement and equivalence predicates. Rounding is for display only. The
+  method is experimental until it has independent methodology review.
+- **`validators`** — correctness claims bound to the subject and input
+  identities they were checked against, so a claim about a previous build
+  cannot be read as covering this one.
+- **`campaign`** — durable commits, a run ID that is never reused, an
+  idempotent recommit, and a resume that never reruns a finished slot and
+  never substitutes a replacement measurement into the original analysis.
+- **`report`** — one semantic report that renderers display and never
+  decide, with every dimension kept after one of them has settled the
+  outcome.
+- **`bundle`** — `ceteris-receipt v3`, which carries a manifest reference and
+  nothing else, because a claim printed on the line is a claim nobody
+  checked. Verification is offline, read-only, refuses paths that escape the
+  bundle, and separates whether the bundle is genuine from whether it passed
+  and from whether it is sufficient for a given use.
+- **`migration`** — reads schema 2 and 3 without letting them gain evidence.
+  Every gap becomes a named limitation, and a legacy record qualifies for a
+  policy only when it genuinely satisfies it.
+
+New commands: `ceteris plan`, `ceteris migrate`, `ceteris bundle verify`,
+`ceteris bundle inspect`.
+
 ### Migration
 
 Certificates issued before this release report a configuration mismatch,

@@ -1,0 +1,296 @@
+{
+  "encoding": "ceteris-json-v1",
+  "note": "Frozen byte vectors for the canonical encoding. An independent implementation must reproduce `canonical` exactly and agree on `digest`. Edit only alongside a deliberate, versioned encoding change.",
+  "vectors": [
+    {
+      "name": "empty object",
+      "value": {},
+      "canonical": "{}",
+      "utf8_bytes": 2,
+      "digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "empty array",
+      "value": [],
+      "canonical": "[]",
+      "utf8_bytes": 2,
+      "digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "name": "null",
+      "value": null,
+      "canonical": "null",
+      "utf8_bytes": 4,
+      "digest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "name": "booleans are not integers",
+      "value": {
+        "t": true,
+        "f": false
+      },
+      "canonical": "{\"f\":false,\"t\":true}",
+      "utf8_bytes": 20,
+      "digest": "sha256:c22848c47426fcf4d27e55573c22f1d23546315c251e8e4bc384820ba5fae568"
+    },
+    {
+      "name": "integer zero has no sign",
+      "value": {
+        "z": 0,
+        "neg": -1
+      },
+      "canonical": "{\"neg\":-1,\"z\":0}",
+      "utf8_bytes": 16,
+      "digest": "sha256:f6012505e88a1a66db96e38235724283f3202675a4d3454e87b7b7654464a1c4"
+    },
+    {
+      "name": "largest exactly representable integers",
+      "value": {
+        "hi": 9007199254740991,
+        "lo": -9007199254740991
+      },
+      "canonical": "{\"hi\":9007199254740991,\"lo\":-9007199254740991}",
+      "utf8_bytes": 46,
+      "digest": "sha256:9de90938b1329f1749f32422c9e7ff27b012a0103749ec3c3e817204e64d2d5d"
+    },
+    {
+      "name": "keys sort by unicode scalar value",
+      "value": {
+        "z": 1,
+        "a": 2,
+        "\u00e9": 3,
+        "A": 4,
+        "_": 5
+      },
+      "canonical": "{\"A\":4,\"_\":5,\"a\":2,\"z\":1,\"\\u00e9\":3}",
+      "utf8_bytes": 36,
+      "digest": "sha256:6b62a6067aa53e943e298e4290101c6586b6f6b45a61052eca82094b86907369"
+    },
+    {
+      "name": "array order is significant",
+      "value": [
+        3,
+        1,
+        2
+      ],
+      "canonical": "[3,1,2]",
+      "utf8_bytes": 7,
+      "digest": "sha256:51bda7ab4e44726cde71fcb6e4b515357059bb6b6dd5146d1fc50f73f11678c6"
+    },
+    {
+      "name": "the five short escapes",
+      "value": "\b\t\n\f\r",
+      "canonical": "\"\\b\\t\\n\\f\\r\"",
+      "utf8_bytes": 12,
+      "digest": "sha256:6e62a535b04fecef3e63e0a67bc2a0657383132fed040cbe7fcb725ed72bae27"
+    },
+    {
+      "name": "quote and backslash",
+      "value": "he said \"hi\" \\ there",
+      "canonical": "\"he said \\\"hi\\\" \\\\ there\"",
+      "utf8_bytes": 25,
+      "digest": "sha256:146805b37478c5fb8cd5e50ee4665894b501620623511b1735aa547f539b4717"
+    },
+    {
+      "name": "solidus is not escaped",
+      "value": "a/b",
+      "canonical": "\"a/b\"",
+      "utf8_bytes": 5,
+      "digest": "sha256:f5effa31772a3689cb116700c569f4b72d765290968f099016a899ab6c1e4ee3"
+    },
+    {
+      "name": "other control characters",
+      "value": "\u001f",
+      "canonical": "\"\\u001f\"",
+      "utf8_bytes": 8,
+      "digest": "sha256:6e1f297fd3657440862f051f44e4bc0ee6b26348011e5891e91aa1aa7e9c0759"
+    },
+    {
+      "name": "delete is escaped although it is ascii",
+      "value": "\u007f",
+      "canonical": "\"\\u007f\"",
+      "utf8_bytes": 8,
+      "digest": "sha256:226453a6508483054f1ddc449c26b45077f5a45d993034f0f5f04f3f9801c32c"
+    },
+    {
+      "name": "non-ascii bmp",
+      "value": "caf\u00e9 \u4f60\u597d",
+      "canonical": "\"caf\\u00e9 \\u4f60\\u597d\"",
+      "utf8_bytes": 24,
+      "digest": "sha256:26c368c4a1e0f9ee73a919fa3e13eb69b48a43466c172e1c8e9edf6bfa608731"
+    },
+    {
+      "name": "supplementary plane uses a surrogate pair",
+      "value": "\ud83d\ude00",
+      "canonical": "\"\\ud83d\\ude00\"",
+      "utf8_bytes": 14,
+      "digest": "sha256:e30439cb87e140c0b998ad3095285abfec0294e2a8916f9a8f30d85734e6f82b"
+    },
+    {
+      "name": "nesting",
+      "value": {
+        "a": {
+          "b": [
+            {
+              "c": []
+            },
+            {}
+          ]
+        }
+      },
+      "canonical": "{\"a\":{\"b\":[{\"c\":[]},{}]}}",
+      "utf8_bytes": 25,
+      "digest": "sha256:5ca73de7f32e05cabbfa66e5526e06b755f2b48e635589a22c1033dc58a1b23d"
+    },
+    {
+      "name": "decimal measurements are strings",
+      "value": {
+        "estimate": "0.125",
+        "samples": [
+          "0.124",
+          "0.127"
+        ]
+      },
+      "canonical": "{\"estimate\":\"0.125\",\"samples\":[\"0.124\",\"0.127\"]}",
+      "utf8_bytes": 48,
+      "digest": "sha256:58b6f75fa39b12648947268ac62ad3c26ea03e25ee69d9916246b50740e568ad"
+    },
+    {
+      "name": "a rational effect",
+      "value": {
+        "numerator": "-1",
+        "denominator": "10"
+      },
+      "canonical": "{\"denominator\":\"10\",\"numerator\":\"-1\"}",
+      "utf8_bytes": 37,
+      "digest": "sha256:c96be9044404619b9a2307d15a9bc8112fa60a7874d974dbb42c9265e04567d3"
+    }
+  ],
+  "decimals": [
+    {
+      "name": "integer",
+      "source": "12",
+      "canonical": "12"
+    },
+    {
+      "name": "zero",
+      "source": "0",
+      "canonical": "0"
+    },
+    {
+      "name": "negative zero collapses",
+      "source": "-0",
+      "canonical": "0"
+    },
+    {
+      "name": "trailing fractional zeros are dropped",
+      "source": "1.2500",
+      "canonical": "1.25"
+    },
+    {
+      "name": "leading zeros are dropped",
+      "source": "000.5",
+      "canonical": "0.5"
+    },
+    {
+      "name": "exponents are expanded",
+      "source": "1e3",
+      "canonical": "1000"
+    },
+    {
+      "name": "negative fraction",
+      "source": "-2.5",
+      "canonical": "-2.5"
+    },
+    {
+      "name": "small fraction keeps its digits",
+      "source": "0.125",
+      "canonical": "0.125"
+    },
+    {
+      "name": "a value binary floats cannot hold exactly",
+      "source": "0.1",
+      "canonical": "0.1"
+    },
+    {
+      "name": "many decimal places survive",
+      "source": "1.000000000000000000000001",
+      "canonical": "1.000000000000000000000001"
+    }
+  ],
+  "rejected_decimals": [
+    {
+      "name": "not a number",
+      "source": "'twelve'",
+      "error": "CanonicalError"
+    },
+    {
+      "name": "infinity",
+      "source": "'Infinity'",
+      "error": "CanonicalError"
+    },
+    {
+      "name": "not a number literal",
+      "source": "'NaN'",
+      "error": "CanonicalError"
+    },
+    {
+      "name": "too many significant digits",
+      "source": "'1.22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222'",
+      "error": "NumericLimitExceeded"
+    },
+    {
+      "name": "exponent beyond the limit",
+      "source": "'1e400'",
+      "error": "NumericLimitExceeded"
+    },
+    {
+      "name": "a binary float has already lost precision",
+      "source": "0.1",
+      "error": "CanonicalError"
+    },
+    {
+      "name": "a boolean is not a measurement",
+      "source": "True",
+      "error": "CanonicalError"
+    }
+  ],
+  "rationals": [
+    {
+      "name": "already reduced",
+      "numerator": "-1",
+      "denominator": "10",
+      "canonical": {
+        "numerator": "-1",
+        "denominator": "10"
+      }
+    },
+    {
+      "name": "reduced by gcd",
+      "numerator": "4",
+      "denominator": "8",
+      "canonical": {
+        "numerator": "1",
+        "denominator": "2"
+      }
+    },
+    {
+      "name": "sign moves to the numerator",
+      "numerator": "1",
+      "denominator": "-2",
+      "canonical": {
+        "numerator": "-1",
+        "denominator": "2"
+      }
+    },
+    {
+      "name": "zero numerator",
+      "numerator": "0",
+      "denominator": "5",
+      "canonical": {
+        "numerator": "0",
+        "denominator": "1"
+      }
+    }
+  ]
+}

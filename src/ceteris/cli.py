@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import certificate
 from . import store as store_mod
-from .compare import EXIT_OK, EXIT_UNDECLARED, EXIT_USAGE, compare as compare_fingerprints
+from .compare import EXIT_INTEGRITY, EXIT_OK, EXIT_UNDECLARED, EXIT_USAGE, compare as compare_fingerprints
 from .config import Config
 from .metrics import parse_cli_metrics
 from .model import Fingerprint
@@ -141,6 +141,9 @@ def _build_parser() -> argparse.ArgumentParser:
     ver.add_argument("certificate", help="the ceteris-certified line, quoted")
     ver.add_argument("fingerprints", nargs="+", help="the record files the certificate covers")
     ver.add_argument("--config", help="TOML or JSON config extending the defaults")
+    ver.add_argument("--require-pass", action="store_true",
+                     help="exit non-zero unless the comparison itself passed, not merely that "
+                          "the certificate honestly describes it")
     return parser
 
 
@@ -234,9 +237,17 @@ def _cmd_verify(args) -> int:
         fingerprints, vary=parsed.vary, waive=parsed.waive, cfg=cfg, strict=parsed.strict,
         require_signal=parsed.require_signal,
     )
-    ok, why = certificate.verify(args.certificate, report)
-    sys.stdout.write(f"ceteris: {why}\n")
-    return EXIT_OK if ok else EXIT_UNDECLARED
+    result = certificate.verify(args.certificate, report)
+    sys.stdout.write(f"ceteris: {result.message}\n")
+    if not result.integrity_verified:
+        return EXIT_INTEGRITY if args.require_pass else EXIT_UNDECLARED
+    if args.require_pass and not result.comparison_passed:
+        sys.stdout.write(
+            f"ceteris: the certificate is genuine and the comparison did not pass "
+            f"({result.verdict})\n"
+        )
+        return EXIT_UNDECLARED
+    return EXIT_OK
 
 
 def _cmd_run(args) -> int:

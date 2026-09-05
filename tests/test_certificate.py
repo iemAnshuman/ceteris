@@ -9,7 +9,7 @@ import pytest
 
 from ceteris import certificate
 from ceteris.cli import main
-from ceteris.compare import EXIT_OK, EXIT_UNDECLARED, compare
+from ceteris.compare import EXIT_INTEGRITY, EXIT_OK, EXIT_UNDECLARED, compare
 from ceteris.config import Config
 from ceteris.model import Field, State, value
 
@@ -42,15 +42,15 @@ def test_issue_and_verify_round_trip(tmp_path, cfg):
     line = certificate.issue(compare([a, b], vary=["build.cxx_flags"], cfg=cfg))
     assert line.startswith("ceteris-certified v2 configs=2 n=1,1 vary=build.cxx_flags")
     assert "verdict=ok" in line
-    assert certificate.verify(line, compare([a, b], vary=["build.cxx_flags"], cfg=cfg))[0]
+    assert certificate.verify(line, compare([a, b], vary=["build.cxx_flags"], cfg=cfg)).integrity_verified
 
 
 def test_an_edited_record_fails_verification(tmp_path, cfg):
     a, b, pa, pb = two(tmp_path)
     line = certificate.issue(compare([a, b], vary=["build.cxx_flags"], cfg=cfg))
     b.fields["source.commit"] = value("tampered")
-    ok, why = certificate.verify(line, compare([a, b], vary=["build.cxx_flags"], cfg=cfg))
-    assert not ok and "mismatch" in why
+    result = certificate.verify(line, compare([a, b], vary=["build.cxx_flags"], cfg=cfg))
+    assert not result.integrity_verified and "mismatch" in result.message
 
 
 def test_an_edited_measurement_fails_verification(cfg):
@@ -61,8 +61,7 @@ def test_an_edited_measurement_fails_verification(cfg):
     runs[0].metrics["t"] = Field(State.VALUE, 1.005)   # verdict still "signal"
     report = compare(runs, vary=["build.cxx_flags"], cfg=cfg)
     assert [v.within_noise for v in report.noise] == [False]
-    ok, _ = certificate.verify(line, report)
-    assert not ok
+    assert not certificate.verify(line, report).integrity_verified
 
 
 def test_an_edited_informational_field_fails_verification(cfg):
@@ -71,7 +70,7 @@ def test_an_edited_informational_field_fails_verification(cfg):
         r.fields["source.branch"] = value("main")
     line = certificate.issue(compare(runs, vary=["build.cxx_flags"], cfg=cfg))
     runs[3].fields["source.branch"] = value("other")
-    assert not certificate.verify(line, compare(runs, vary=["build.cxx_flags"], cfg=cfg))[0]
+    assert not certificate.verify(line, compare(runs, vary=["build.cxx_flags"], cfg=cfg)).integrity_verified
 
 
 def test_the_hash_does_not_depend_on_file_order(cfg):
@@ -81,7 +80,7 @@ def test_the_hash_does_not_depend_on_file_order(cfg):
     a = measured("a", "-O3", [1.0, 1.01, 1.02], extra={"a_only": 5.0})
     b = measured("b", "-O0", [2.0, 2.01, 2.02], extra={"b_only": 7.0})
     line = certificate.issue(compare(a + b, vary=["build.cxx_flags"], cfg=cfg))
-    assert certificate.verify(line, compare(b + a, vary=["build.cxx_flags"], cfg=cfg))[0]
+    assert certificate.verify(line, compare(b + a, vary=["build.cxx_flags"], cfg=cfg)).integrity_verified
 
 
 def test_the_line_carries_its_own_declarations(tmp_path, cfg):
@@ -103,7 +102,7 @@ def test_waiver_reasons_round_trip_exactly(tmp_path, cfg, reason):
     report = compare([a, b], vary=["build.cxx_flags"], waive={"source.commit": reason}, cfg=cfg)
     line = certificate.issue(report)
     assert certificate.parse(line).waive == {"source.commit": reason}
-    assert certificate.verify(line, compare([a, b], vary=["build.cxx_flags"], waive={"source.commit": reason}, cfg=cfg))[0]
+    assert certificate.verify(line, compare([a, b], vary=["build.cxx_flags"], waive={"source.commit": reason}, cfg=cfg)).integrity_verified
 
 
 def test_a_within_noise_certificate_verifies(cfg):
@@ -115,7 +114,7 @@ def test_a_within_noise_certificate_verifies(cfg):
     assert "verdict=within-noise" in line and "signal=1" in line
     parsed = certificate.parse(line)
     again = compare(runs, vary=["build.cxx_flags"], cfg=cfg, require_signal=parsed.require_signal)
-    assert certificate.verify(line, again)[0]
+    assert certificate.verify(line, again).integrity_verified
 
 
 def test_a_different_severity_map_is_named_not_a_bare_mismatch(tmp_path, cfg):
@@ -123,8 +122,8 @@ def test_a_different_severity_map_is_named_not_a_bare_mismatch(tmp_path, cfg):
     line = certificate.issue(compare([a, b], vary=["build.cxx_flags"], cfg=cfg))
     other = Config.load()
     other.severity["source.commit"] = "informational"
-    ok, why = certificate.verify(line, compare([a, b], vary=["build.cxx_flags"], cfg=other))
-    assert not ok and "configuration mismatch" in why
+    result = certificate.verify(line, compare([a, b], vary=["build.cxx_flags"], cfg=other))
+    assert not result.integrity_verified and "configuration mismatch" in result.message
 
 
 def test_a_confounded_comparison_certifies_as_confounded(tmp_path, cfg):
@@ -163,3 +162,77 @@ def test_version_one_is_refused_with_a_reason():
 def test_garbage_is_rejected():
     with pytest.raises(ValueError):
         certificate.parse("definitely not a certificate")
+
+
+# --- F01: the displayed claims are part of the certificate --------------------
+
+
+def _confounded(cfg):
+    """A genuine certificate for a comparison that did not pass."""
+    a = fp("a", source__commit="abc", build__cxx_flags="-O3")
+    b = fp("b", source__commit="zzz", build__cxx_flags="-O0")
+    report = compare([a, b], vary=["build.cxx_flags"], cfg=cfg)
+    assert report.exit_code != 0
+    return certificate.issue(report), [a, b]
+
+
+@pytest.mark.parametrize("edit, why", [
+    (("verdict=confounded", "verdict=ok"), "a failed comparison relabelled as passing"),
+    (("configs=2", "configs=9"), "an inflated configuration count"),
+    (("n=1,1", "n=7,7"), "an inflated sample count"),
+])
+def test_editing_a_displayed_field_fails_verification(cfg, edit, why):
+    """The whole point of the line is that a reader can trust what it says.
+    Version 2 bound the records and left the sentence unbound: changing
+    `verdict=confounded` to `verdict=ok` still printed `verified: ok`."""
+    line, runs = _confounded(cfg)
+    old, new = edit
+    assert old in line, line
+    tampered = line.replace(old, new)
+    result = certificate.verify(tampered, compare(runs, vary=["build.cxx_flags"], cfg=cfg))
+    assert not result.integrity_verified, why
+    assert "altered" in result.message
+
+
+def test_an_unknown_verdict_word_is_refused(cfg):
+    line, _ = _confounded(cfg)
+    with pytest.raises(ValueError, match="not one of"):
+        certificate.parse(line.replace("verdict=confounded", "verdict=splendid"))
+
+
+def test_a_genuine_failure_verifies_its_integrity_and_says_it_failed(cfg):
+    line, runs = _confounded(cfg)
+    result = certificate.verify(line, compare(runs, vary=["build.cxx_flags"], cfg=cfg))
+    assert result.integrity_verified
+    assert not result.comparison_passed
+    assert result.verdict == "confounded"
+    assert "verified: confounded" == result.message
+
+
+def test_naming_the_files_in_another_order_still_verifies(cfg):
+    """`n` is a multiset: the hash sorts the records, so it never bound the
+    order configurations were discovered in."""
+    a = measured("a", "-O3", [1.0, 1.01, 1.02])
+    b = measured("b", "-O0", [2.0, 2.01])
+    line = certificate.issue(compare(a + b, vary=["build.cxx_flags"], cfg=cfg))
+    assert certificate.verify(line, compare(b + a, vary=["build.cxx_flags"], cfg=cfg)).integrity_verified
+
+
+def test_cli_require_pass_separates_genuine_from_passing(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    a = fp("a", source__commit="abc", build__cxx_flags="-O3")
+    b = fp("b", source__commit="zzz", build__cxx_flags="-O0")
+    pa, pb = tmp_path / "a.json", tmp_path / "b.json"
+    pa.write_text(a.dumps()); pb.write_text(b.dumps())
+    main(["compare", str(pa), str(pb), "--vary", "build.cxx_flags", "--certify"])
+    line = [l for l in capsys.readouterr().out.splitlines() if l.startswith("ceteris-certified")][0]
+
+    # Honest certificate for a failed comparison: integrity is fine on its own.
+    assert main(["verify", line, str(pa), str(pb)]) == EXIT_OK
+    assert "verified: confounded" in capsys.readouterr().out
+    # Asking whether it passed is a different question.
+    assert main(["verify", "--require-pass", line, str(pa), str(pb)]) == EXIT_UNDECLARED
+    assert "did not pass" in capsys.readouterr().out
+    # A tampered line is an integrity failure, which is its own exit code.
+    assert main(["verify", "--require-pass", line.replace("verdict=confounded", "verdict=ok"),
+                 str(pa), str(pb)]) == EXIT_INTEGRITY

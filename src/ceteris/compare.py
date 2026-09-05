@@ -24,6 +24,8 @@ EXIT_UNDECLARED = 1
 EXIT_INDETERMINATE = 2
 EXIT_USAGE = 3
 EXIT_WITHIN_NOISE = 4
+# Digest, bundle membership, or receipt semantic integrity mismatch.
+EXIT_INTEGRITY = 5
 
 
 class Verdict(str, Enum):

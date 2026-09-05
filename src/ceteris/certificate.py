@@ -31,10 +31,16 @@ import re
 from dataclasses import dataclass
 from urllib.parse import quote, unquote
 
-from .compare import Report
+from .compare import EXIT_OK, Report
 from .model import Fingerprint
 
 VERSION = 2
+
+# The closed set of verdicts a line may claim. Parsing anything else is a
+# malformed line, not an unknown-but-acceptable state.
+VERDICTS = ("ok", "confounded", "indeterminate", "within-noise", "invalid")
+
+_VERDICT_OF_EXIT = {0: "ok", 1: "confounded", 2: "indeterminate", 4: "within-noise"}
 
 # Characters allowed to stand for themselves in the declarations. Everything
 # else, spaces above all, is percent-encoded so the line stays one token per
@@ -90,8 +96,12 @@ def _noise_summary(report: Report) -> str:
     return f"{max(v.noise for v in assessed):.0%}"
 
 
+def verdict_of(report: Report) -> str:
+    return _VERDICT_OF_EXIT.get(report.exit_code, "invalid")
+
+
 def issue(report: Report) -> str:
-    verdict = {0: "ok", 1: "confounded", 2: "indeterminate", 4: "within-noise"}.get(report.exit_code, "invalid")
+    verdict = verdict_of(report)
     n = ",".join(str(g.n) for g in report.configs)
     vary = ",".join(quote(v, safe=_SAFE) for v in report.declared)
     waive = ";".join(
@@ -108,18 +118,30 @@ def issue(report: Report) -> str:
 
 @dataclass
 class Parsed:
+    """Everything the line claims, including the parts a reader believes.
+
+    Version 1 and the first version 2 parser dropped `configs`, `n`, `verdict`
+    and `noise` on the floor, so those could be edited freely: the digest
+    covered the recomputed report, and `verify` echoed the line's own verdict
+    back as its result. Every displayed field is captured here and checked
+    against the report in `verify`.
+    """
+
+    configs: int
+    n: tuple
     vary: list[str]
     waive: dict[str, str]
     strict: bool
     require_signal: bool
     verdict: str
+    noise: str
     config: str
     digest: str
 
 
 _V2 = re.compile(
-    r"ceteris-certified v2 configs=\d+ n=[\d,]* vary=(\S*) waive=(\S*) strict=([01]) "
-    r"signal=([01]) verdict=(\S+) noise=\S+ config=([0-9a-f]{12}) sha256:([0-9a-f]{64})\s*$"
+    r"ceteris-certified v2 configs=(\d+) n=(\d+(?:,\d+)*|) vary=(\S*) waive=(\S*) strict=([01]) "
+    r"signal=([01]) verdict=(\S+) noise=(\d+%|unassessed) config=([0-9a-f]{12}) sha256:([0-9a-f]{64})\s*$"
 )
 
 
@@ -141,30 +163,91 @@ def parse(line: str) -> Parsed:
     if not m:
         raise ValueError("malformed version 2 certificate line")
     waive: dict[str, str] = {}
-    if m.group(2):
-        for item in m.group(2).split(";"):
+    if m.group(4):
+        for item in m.group(4).split(";"):
             k, _, v = item.partition(":")
             waive[unquote(k)] = unquote(v)
+    verdict = m.group(7)
+    if verdict not in VERDICTS:
+        raise ValueError(
+            f"certificate claims verdict {verdict!r}, which is not one of "
+            + ", ".join(VERDICTS)
+        )
     return Parsed(
-        vary=[unquote(v) for v in m.group(1).split(",") if v],
+        configs=int(m.group(1)),
+        # An unordered multiset: the version 2 hash sorts the records, so it
+        # does not bind the order configurations were discovered in, and
+        # naming the same files in another order is a legitimate re-check.
+        n=tuple(sorted(int(x) for x in m.group(2).split(",") if x)),
+        vary=[unquote(v) for v in m.group(3).split(",") if v],
         waive=waive,
-        strict=m.group(3) == "1",
-        require_signal=m.group(4) == "1",
-        verdict=m.group(5),
-        config=m.group(6),
-        digest=m.group(7),
+        strict=m.group(5) == "1",
+        require_signal=m.group(6) == "1",
+        verdict=verdict,
+        noise=m.group(8),
+        config=m.group(9),
+        digest=m.group(10),
     )
 
 
-def verify(line: str, report: Report) -> tuple[bool, str]:
+@dataclass
+class Verification:
+    """Two independent questions, which the old boolean conflated.
+
+    `integrity_verified` says the line describes these records honestly.
+    `comparison_passed` says the comparison it describes was valid. A
+    faithfully recorded failure verifies its integrity and did not pass, and
+    a reader must be able to see both.
+    """
+
+    integrity_verified: bool
+    comparison_passed: bool
+    verdict: str
+    message: str
+
+    def __bool__(self) -> bool:  # pragma: no cover - compatibility shim
+        return self.integrity_verified
+
+    def __iter__(self):
+        """Unpacks like the old (ok, why) tuple."""
+        return iter((self.integrity_verified, self.message))
+
+
+def _display_mismatch(parsed: Parsed, report: Report) -> str | None:
+    """The claims a reader takes at face value, recomputed from the records."""
+    for name, claimed, actual in (
+        ("verdict", parsed.verdict, verdict_of(report)),
+        ("configs", parsed.configs, len(report.configs)),
+        ("n", parsed.n, tuple(sorted(g.n for g in report.configs))),
+        ("noise", parsed.noise, _noise_summary(report)),
+    ):
+        if claimed != actual:
+            shown = ",".join(str(x) for x in claimed) if isinstance(claimed, tuple) else claimed
+            real = ",".join(str(x) for x in actual) if isinstance(actual, tuple) else actual
+            return (
+                f"the certificate displays {name}={shown} but these records give "
+                f"{name}={real}; the line has been altered"
+            )
+    return None
+
+
+def verify(line: str, report: Report) -> Verification:
     parsed = parse(line)
+    passed = report.exit_code == EXIT_OK
+    actual = verdict_of(report)
     if parsed.config != report.config_digest:
-        return False, (
+        return Verification(False, passed, actual, (
             f"configuration mismatch: the certificate was issued under severity/"
             f"comparator configuration {parsed.config}, this check runs under "
             f"{report.config_digest}. Use the same --config (or the same project "
             f"directory, whose ceteris.toml is picked up automatically)."
-        )
+        ))
     if _hash(report) != parsed.digest:
-        return False, "hash mismatch: the records, measurements, declarations or verdict differ from what was certified"
-    return True, f"verified: {parsed.verdict}"
+        return Verification(False, passed, actual,
+                            "hash mismatch: the records, measurements, declarations or verdict "
+                            "differ from what was certified")
+    altered = _display_mismatch(parsed, report)
+    if altered:
+        return Verification(False, passed, actual, altered)
+    # The recomputed verdict, never the one the line asked us to print.
+    return Verification(True, passed, actual, f"verified: {actual}")

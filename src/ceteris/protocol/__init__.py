@@ -17,8 +17,19 @@ from .encoding import (
     loads,
     rational,
 )
+from .models import Capability, Field, Metric, ProtocolError, Provenance
+from .validation import Issue, SCHEMA_VERSION, load_run, validate_run
 
 __all__ = [
+    "Capability",
+    "Field",
+    "Issue",
+    "Metric",
+    "ProtocolError",
+    "Provenance",
+    "SCHEMA_VERSION",
+    "load_run",
+    "validate_run",
     "CanonicalError",
     "NumericLimitExceeded",
     "canonical_bytes",

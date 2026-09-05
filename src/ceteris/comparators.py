@@ -48,11 +48,34 @@ def scalar(v: Any) -> Hashable:
     return str(v)
 
 
-def flagset(v: Any) -> Hashable:
-    """Order-insensitive compiler flag comparison, when that is safe.
+def tokens(v: Any) -> Hashable:
+    """Ordered token comparison. The conservative default for anything that
+    is a command line or a flag string.
 
-    Returns a sorted multiset only when no override family repeats. Otherwise
-    falls back to the exact token sequence, because order decides the result.
+    Order is meaning. `-n 2 -N 4` and `-n 4 -N 2` are different jobs, `-I a
+    -I b` and `-I b -I a` are different search paths, and `-D X=1 -D X=2`
+    resolves differently each way. `flagset` sorted these into equality,
+    which is the one error this tool must never make: a difference reported
+    as a match. Whitespace in a flag *string* is normalised because it never
+    carried meaning; a list is compared exactly as its tokens stand, because
+    those boundaries came from argv and are evidence.
+    """
+    if v is None:
+        return None
+    if isinstance(v, str):
+        return ("tokens",) + tuple(v.split())
+    if isinstance(v, (list, tuple)):
+        return ("tokens",) + tuple(str(x) for x in v)
+    return ("tokens", str(v))
+
+
+def flagset(v: Any) -> Hashable:
+    """Legacy order-insensitive flag comparison. Not for new policy.
+
+    Retained only so records and configurations written against it can still
+    be read under an explicitly chosen legacy comparator. It reports two
+    different command lines as one whenever their tokens are a permutation,
+    which is why `tokens` replaced it as the default. See design F02.
     """
     if v is None:
         return None
@@ -97,6 +120,8 @@ def as_set(v: Any) -> Hashable:
 
 COMPARATORS: dict[str, Callable[[Any], Hashable]] = {
     "scalar": scalar,
+    "tokens": tokens,
+    # Legacy, kept readable but never a default. See `flagset` above.
     "flagset": flagset,
     "version": version,
     "path": path,

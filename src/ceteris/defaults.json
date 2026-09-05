@@ -26,10 +26,10 @@
     ]
   },
   "comparators": {
-    "build.cmake.CMAKE_CUDA_FLAGS": "flagset",
-    "build.cmake.CMAKE_CXX_FLAGS*": "flagset",
-    "build.cxx_flags": "flagset",
-    "execution.launcher_args": "flagset",
+    "build.cmake.CMAKE_CUDA_FLAGS": "tokens",
+    "build.cmake.CMAKE_CXX_FLAGS*": "tokens",
+    "build.cxx_flags": "tokens",
+    "execution.launcher_args": "tokens",
     "hardware.gpu_models": "set",
     "hardware.hostnames": "set",
     "scheduler.submit_dir": "path",

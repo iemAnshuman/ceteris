@@ -239,13 +239,32 @@ def test_a_declaration_matching_no_field_is_flagged_as_a_likely_typo(cfg):
 # --- comparators ------------------------------------------------------------
 
 
-def test_reordered_flags_match_and_are_noted(cfg):
+def test_reordered_flags_are_a_difference(cfg):
+    """These two probably do build the same binary, and the tool used to say
+    so by sorting the tokens. Sorting is what made `-n 2 -N 4` equal to
+    `-n 4 -N 2` and `-I a -I b` equal to its reverse, which is a difference
+    reported as a match. An extra reported difference is the cheap error;
+    the other one is the expensive one. See design F02."""
     a = fp("run-a", build__cxx_flags="-O3 -march=native")
     b = fp("run-b", build__cxx_flags="-march=native -O3")
-    report = compare([a, b], cfg=cfg)
-    result = result_for(report, "build.cxx_flags")
-    assert result.verdict is Verdict.MATCH
-    assert "different order" in (result.note or "")
+    assert result_for(compare([a, b], cfg=cfg), "build.cxx_flags").verdict is Verdict.DIFFER
+
+
+def test_only_whitespace_is_normalised_in_a_flag_string(cfg):
+    a = fp("run-a", build__cxx_flags="-O3   -march=native")
+    b = fp("run-b", build__cxx_flags=" -O3 -march=native ")
+    assert result_for(compare([a, b], cfg=cfg), "build.cxx_flags").verdict is Verdict.MATCH
+
+
+def test_argument_order_is_a_difference_for_a_launcher(cfg):
+    """`-n 2 -N 4` is two tasks on four nodes; the reverse is four on two."""
+    a = fp("run-a", execution__launcher_args=["-n", "2", "-N", "4"])
+    b = fp("run-b", execution__launcher_args=["-n", "4", "-N", "2"])
+    assert result_for(compare([a, b], cfg=cfg), "execution.launcher_args").verdict is Verdict.DIFFER
+
+    inc_a = fp("run-a", execution__launcher_args=["-I", "first", "-I", "second"])
+    inc_b = fp("run-b", execution__launcher_args=["-I", "second", "-I", "first"])
+    assert result_for(compare([inc_a, inc_b], cfg=cfg), "execution.launcher_args").verdict is Verdict.DIFFER
 
 
 def test_last_wins_flags_are_not_flattened_by_sorting(cfg):

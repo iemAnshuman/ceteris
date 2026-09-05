@@ -33,32 +33,98 @@ _SCRIPT_EXTENSIONS = (
 )
 _ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
-LAUNCHERS = {
-    "mpirun", "mpiexec", "mpiexec.hydra", "srun", "jsrun", "aprun", "prun",
-    "orterun", "prterun", "flux",
+# Launcher option grammars, one per family.
+#
+# A single shared table got this wrong in both directions: `-c` takes a value
+# under srun (cpus-per-task) and is a process count under Open MPI, and
+# `--exclusive` was listed as valued although Slurm takes it bare, which ate
+# the program name. Each family therefore carries its own grammar, and an
+# option outside its family's grammar makes the decomposition unknown rather
+# than guessed. The verbatim command line is recorded either way.
+
+_OPENMPI = {
+    "valued": {
+        "-n", "-np", "--np", "--n", "-c", "-H", "-host", "--host", "-hostfile",
+        "--hostfile", "-machinefile", "--machinefile", "-x", "--bind-to",
+        "--map-by", "--rank-by", "-rf", "--rankfile", "--output", "--prefix",
+        "--wdir", "--path", "--tune", "--report-bindings-to", "-am", "--am",
+    },
+    "two_valued": {"--mca", "-mca", "--gmca", "-gmca"},
+    "flags": {
+        "--oversubscribe", "--nooversubscribe", "--use-hwthread-cpus", "-v",
+        "--verbose", "--display-map", "--report-bindings", "--do-not-launch",
+        "--tag-output", "--timestamp-output", "--merge-stderr-to-stdout",
+        "--allow-run-as-root", "-q", "--quiet", "--nolocal", "--novm",
+    },
 }
 
-# Launcher options that consume the following token as their value. Anything
-# written as --opt=value is self-contained and needs no entry here.
-_VALUED = {
-    "-n", "-np", "--np", "-c", "-N", "-H", "-host", "--host", "-hostfile",
-    "--hostfile", "-machinefile", "--machinefile", "-x", "--bind-to",
-    "--map-by", "--rank-by", "-rf", "--rankfile", "--ntasks", "--nodes",
-    "--ntasks-per-node", "--cpus-per-task", "--gpus", "--gpus-per-task",
-    "--gpus-per-node", "--gres", "-p", "--partition", "-t", "--time", "-J",
-    "--job-name", "-o", "--output", "-e", "--error", "--cpu-bind",
-    "--cpu_bind", "--mem", "--mem-per-cpu", "--distribution", "-m",
-    "--mpi", "-a", "-g", "-r", "-b", "-d", "-A", "--account", "-q", "--qos",
-    "--exclusive", "-env", "-genv", "-f", "-ppn", "-hosts", "-configfile",
+_HYDRA = {
+    "valued": {
+        "-n", "-np", "--np", "-f", "-hostfile", "--hostfile", "-hosts",
+        "-ppn", "-configfile", "-env", "-genv", "-launcher", "-bootstrap",
+        "-wdir", "-path", "-bind-to", "-map-by", "-iface",
+    },
+    "two_valued": {"-envlist", "-genvlist"},
+    "flags": {"-genvall", "-genvnone", "-usize", "-verbose", "-print-rank-map"},
 }
-# Options taking two values.
-_TWO_VALUED = {"--mca", "-mca", "--gmca", "-gmca", "-env", "-genv"}
+
+_SRUN = {
+    "valued": {
+        "-n", "--ntasks", "-N", "--nodes", "--ntasks-per-node", "-c",
+        "--cpus-per-task", "--gpus", "-G", "--gpus-per-task", "--gpus-per-node",
+        "--gres", "-p", "--partition", "-t", "--time", "-J", "--job-name",
+        "-o", "--output", "-e", "--error", "-i", "--input", "--cpu-bind",
+        "--cpu_bind", "--mem", "--mem-per-cpu", "--mem-per-gpu",
+        "--distribution", "-m", "--mpi", "-A", "--account", "-q", "--qos",
+        "-w", "--nodelist", "-x", "--exclude", "-D", "--chdir", "-d",
+        "--dependency", "-C", "--constraint", "--export", "--het-group",
+        "--threads-per-core", "--sockets-per-node", "--cores-per-socket",
+        "--switches", "--nice", "--prolog", "--epilog", "--task-prolog",
+        "--task-epilog", "--uid", "--gid", "--reservation",
+    },
+    # Slurm takes these bare, or as --opt=value, never as two tokens.
+    "flags": {
+        "--exclusive", "--overlap", "--overcommit", "-O", "--label", "-l",
+        "--unbuffered", "-u", "--pty", "--verbose", "-v", "--kill-on-bad-exit",
+        "-K", "--no-kill", "-k", "--wait-all-nodes", "--contiguous",
+        "--exclusive-user", "--interactive", "--test-only", "--use-min-nodes",
+    },
+    "two_valued": set(),
+}
+
+_GENERIC = {
+    "valued": {"-n", "-np", "--np", "-N", "--nodes", "-c", "--cpus"},
+    "two_valued": set(),
+    "flags": set(),
+}
+
+# basename -> grammar
+LAUNCHER_GRAMMARS = {
+    "mpirun": _OPENMPI, "mpiexec": _OPENMPI, "orterun": _OPENMPI, "prterun": _OPENMPI,
+    "mpiexec.hydra": _HYDRA,
+    "srun": _SRUN,
+    "jsrun": _GENERIC, "aprun": _GENERIC, "prun": _GENERIC, "flux": _GENERIC,
+}
+
+LAUNCHERS = set(LAUNCHER_GRAMMARS)
+
+# Raised when a launcher's arguments cannot be decomposed with confidence.
+class AmbiguousCommand(Exception):
+    def __init__(self, token: str):
+        super().__init__(
+            f"{token!r} is not a known option of this launcher, so whether the "
+            f"next token is its value or the program cannot be decided"
+        )
+        self.token = token
 
 
 def split(argv: list[str]) -> tuple[str | None, list[str], str | None, list[str]]:
+    """Decompose a launched command. Raises AmbiguousCommand when a known
+    launcher carries an option its grammar does not describe."""
     if not argv:
         return None, [], None, []
-    if os.path.basename(argv[0]) not in LAUNCHERS:
+    grammar = LAUNCHER_GRAMMARS.get(os.path.basename(argv[0]))
+    if grammar is None:
         return None, [], argv[0], list(argv[1:])
     launcher = argv[0]
     i = 1
@@ -68,16 +134,25 @@ def split(argv: list[str]) -> tuple[str | None, list[str], str | None, list[str]
         if token == "--":
             i += 1
             break
-        if token.startswith("-"):
-            launcher_args.append(token)
-            consume = 2 if token in _TWO_VALUED else (1 if token in _VALUED and "=" not in token else 0)
-            for _ in range(consume):
-                i += 1
-                if i < len(argv):
-                    launcher_args.append(argv[i])
+        if not token.startswith("-") or token == "-":
+            break
+        launcher_args.append(token)
+        if "=" in token and token.startswith("--"):
+            consume = 0                     # --opt=value is self-contained
+        elif token in grammar["two_valued"]:
+            consume = 2
+        elif token in grammar["valued"]:
+            consume = 1
+        elif token in grammar["flags"]:
+            consume = 0
+        else:
+            raise AmbiguousCommand(token)
+        for _ in range(consume):
             i += 1
-            continue
-        break
+            if i >= len(argv):
+                raise AmbiguousCommand(token)
+            launcher_args.append(argv[i])
+        i += 1
     if i >= len(argv):
         return launcher, launcher_args, None, []
     return launcher, launcher_args, argv[i], list(argv[i + 1 :])
@@ -181,8 +256,17 @@ def collect(argv: list[str], subjects: list[str] | None = None) -> dict[str, Fie
         "execution.command": value(shlex.join(argv), provenance="wrapped command line"),
         "execution.workdir": value(os.getcwd(), provenance="os.getcwd()"),
     }
-    launcher, largs, program, pargs = split(argv)
-    prov = "heuristic split of the wrapped command line"
+    prov = "decomposition of the wrapped command line by launcher grammar"
+    try:
+        launcher, largs, program, pargs = split(argv)
+    except AmbiguousCommand as exc:
+        # Opaque command, incomplete decomposition coverage. The verbatim
+        # line above is still the ground truth and still gates.
+        for name in ("launcher", "launcher_args", "program", "program_args",
+                     "program_sha256", "program_scripts_sha256"):
+            out[f"execution.{name}"] = unknown(str(exc), provenance=prov)
+        out.update(_no_subject("the command line could not be decomposed"))
+        return out
     out["execution.launcher"] = (
         value(os.path.basename(launcher), provenance=prov)
         if launcher

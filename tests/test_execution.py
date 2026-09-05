@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import sys
 
+import pytest
+
 from ceteris import execution
-from ceteris.compare import EXIT_OK, EXIT_UNDECLARED, compare
+from ceteris.compare import EXIT_INDETERMINATE, EXIT_OK, EXIT_UNDECLARED, compare
 from ceteris.model import State
 from ceteris.runner import run_command
 
@@ -164,3 +166,49 @@ def test_a_script_argument_is_hashed_like_a_binary(tmp_path, monkeypatch, cfg):
 def test_the_verbatim_command_keeps_its_quoting():
     fields = execution.collect(["hyperfine", "-N", "gzip -6 -c f"])
     assert fields["execution.command"].value == "hyperfine -N 'gzip -6 -c f'"
+
+
+# --- F02: token order and launcher grammars -----------------------------------
+
+
+def test_exclusive_is_a_bare_slurm_flag_not_a_valued_option():
+    """It was in the shared valued-option table, so it swallowed the program."""
+    _, largs, program, pargs = execution.split(
+        ["srun", "--exclusive", "-N", "2", "./bench", "4096"])
+    assert largs == ["--exclusive", "-N", "2"]
+    assert (program, pargs) == ("./bench", ["4096"])
+
+
+def test_c_means_different_things_to_srun_and_mpirun():
+    """One shared option table cannot be right for both."""
+    _, largs, program, _ = execution.split(["srun", "-c", "8", "./bench"])
+    assert largs == ["-c", "8"] and program == "./bench"
+    _, largs, program, _ = execution.split(["mpirun", "-c", "4", "./bench"])
+    assert largs == ["-c", "4"] and program == "./bench"
+
+
+def test_a_double_dash_ends_the_launcher_arguments():
+    _, largs, program, pargs = execution.split(
+        ["mpirun", "-n", "2", "--", "./bench", "-n", "99"])
+    assert largs == ["-n", "2"]
+    assert (program, pargs) == ("./bench", ["-n", "99"])
+
+
+def test_an_unknown_launcher_option_is_opaque_not_guessed():
+    """Guessing whether the next token is a value or the program is how a
+    command line silently decomposes into the wrong thing."""
+    with pytest.raises(execution.AmbiguousCommand):
+        execution.split(["srun", "--brand-new-option", "value", "./bench"])
+
+    fields = execution.collect(["srun", "--brand-new-option", "value", "./bench"])
+    assert fields["execution.command"].state is State.VALUE      # ground truth kept
+    for name in ("program", "program_sha256", "launcher_args"):
+        assert fields[f"execution.{name}"].state is State.UNKNOWN
+        assert "--brand-new-option" in fields[f"execution.{name}"].detail
+
+
+def test_two_unknown_commands_do_not_compare_as_agreeing(cfg):
+    from ceteris.model import Fingerprint
+    a = Fingerprint(execution.collect(["srun", "--odd", "x", "./one"]), {"label": "a"})
+    b = Fingerprint(execution.collect(["srun", "--odd", "y", "./two"]), {"label": "b"})
+    assert compare([a, b], cfg=cfg).exit_code == EXIT_INDETERMINATE

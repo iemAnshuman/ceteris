@@ -26,14 +26,16 @@ def test_identical_environments_group_into_one_configuration():
 def test_the_same_configuration_from_a_different_source_is_one_configuration(cfg):
     """compare grouped by canonical value while the table grouped by the
     serialised field, provenance included, so a match in the report could be
-    two configurations in the table."""
+    two configurations in the table. Order is significant since F02, so the
+    difference under test here is where the value was read from and how it
+    was spaced, not how it was ordered."""
     from ceteris.model import Field, State
 
     def r(flags, prov):
         return Fingerprint({"build.cxx_flags": Field(State.VALUE, flags, provenance=prov)},
                            {"label": "x"}, metrics={"bw": value(1.0)}, run={"exit_code": 0})
 
-    runs = [r("-O3 -g", "--cxx-flags")] * 3 + [r("-g -O3", "$CXXFLAGS")] * 3
+    runs = [r("-O3 -g", "--cxx-flags")] * 3 + [r("-O3  -g", "$CXXFLAGS")] * 3
     report = compare(runs, cfg=cfg)
     assert report.results[0].verdict.value == "match"
     assert len(report.configs) == 1 and report.configs[0].n == 6

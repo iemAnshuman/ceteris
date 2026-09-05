@@ -158,11 +158,24 @@ def split(argv: list[str]) -> tuple[str | None, list[str], str | None, list[str]
     return launcher, launcher_args, argv[i], list(argv[i + 1 :])
 
 
+class FileChangedWhileReading(Exception):
+    """The file moved under the hash. Narrower than a guarantee, but it turns
+    a silent wrong answer into a stated unknown."""
+
+
 def _sha256(path: str) -> str:
+    before = os.stat(path)
     h = hashlib.sha256()
     with open(path, "rb") as handle:
         for chunk in iter(lambda: handle.read(1 << 20), b""):
             h.update(chunk)
+    after = os.stat(path)
+    if (before.st_size, before.st_mtime_ns, before.st_ino) != (
+            after.st_size, after.st_mtime_ns, after.st_ino):
+        raise FileChangedWhileReading(
+            f"{path} changed while it was being read; the digest describes no "
+            f"single state of the file"
+        )
     return h.hexdigest()
 
 
@@ -173,8 +186,8 @@ def _scripts(args: list[str]) -> dict[str, str]:
         if a.lower().endswith(_SCRIPT_EXTENSIONS) and os.path.isfile(a):
             try:
                 found[a] = _sha256(a)
-            except OSError:
-                continue
+            except (OSError, FileChangedWhileReading) as exc:
+                found[a] = f"<unreadable: {exc}>"
     return found
 
 
@@ -222,7 +235,7 @@ def _subject_fields(harness: str, subjects: list[str]) -> dict[str, Field]:
         else:
             try:
                 hashes[tokens[0]] = _sha256(resolved)
-            except OSError as exc:
+            except (OSError, FileChangedWhileReading) as exc:
                 problems.append(f"{cmd!r}: {exc}")
         scripts.update(_scripts(tokens[1:]))
     out["execution.subject_sha256"] = (
@@ -304,7 +317,7 @@ def collect(argv: list[str], subjects: list[str] | None = None) -> dict[str, Fie
     if resolved:
         try:
             out["execution.program_sha256"] = value(_sha256(resolved), provenance=hprov)
-        except OSError as exc:
+        except (OSError, FileChangedWhileReading) as exc:
             out["execution.program_sha256"] = unknown(str(exc), provenance=hprov)
     else:
         out["execution.program_sha256"] = unknown(

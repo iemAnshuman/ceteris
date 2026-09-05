@@ -105,6 +105,13 @@ def run_command(
         chosen = adapters.detect(command)
     plan = chosen.plan(command, os.getcwd()) if chosen else adapters.Plan("none", list(command))
 
+    # The identity of what is about to run, taken before it runs. Collecting
+    # it afterwards described whatever the filesystem held once the command
+    # had finished, so a program that rewrote itself was recorded as the
+    # thing it became, identically across runs, with no drift. See design F03.
+    subjects = chosen.subject(command) if chosen else None
+    execution_before = execution.collect(command, subjects=subjects)
+
     started = _dt.datetime.now(_dt.timezone.utc)
     wall_started = time.time()
     clock = time.monotonic()
@@ -150,9 +157,10 @@ def run_command(
 
     output = "".join(chunks)
     after = capture(label=label, **kwargs)
+    execution_after = execution.collect(command, subjects=subjects)
 
     fields = dict(before.fields)
-    fields.update(execution.collect(command, subjects=chosen.subject(command) if chosen else None))
+    fields.update(execution_before)
 
     truncated = len(output) > MAX_OUTPUT
     record: dict[str, Any] = {
@@ -162,7 +170,10 @@ def run_command(
         "duration_s": round(duration, 3),
         "output": output[-MAX_OUTPUT:],
         "output_truncated": truncated,
-        "drift": _drift(before.fields, after.fields, cfg),
+        # The subject's identity is evidence like any other, so it goes
+        # through the same drift evaluator as the environment.
+        "drift": _drift({**before.fields, **execution_before},
+                        {**after.fields, **execution_after}, cfg),
     }
 
     metrics: dict[str, Field] = {}

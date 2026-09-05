@@ -167,3 +167,66 @@ def test_ctrl_c_terminates_the_benchmark(cfg, monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         run_command([sys.executable, "-c", "pass"], cfg=cfg, echo=False)
     assert events == ["reading", "terminate", "wait"]
+
+
+# --- F03: the subject is identified before it runs ----------------------------
+
+SELF_REWRITE = """#!/bin/sh
+echo "value 1"
+printf '#!/bin/sh\\necho "value 2"\\n' > "$0"
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="shell script fixture")
+def test_a_self_rewriting_program_cannot_look_unchanged(cfg, tmp_path, monkeypatch):
+    """Identity used to be collected after the command finished, so it
+    described whatever the filesystem held once the run was over. A script
+    that replaced itself was recorded as the thing it became, identically on
+    both runs, with no drift, and the two runs compared as one subject."""
+    monkeypatch.chdir(tmp_path)
+    script = tmp_path / "selfrewrite.sh"
+    script.write_text(SELF_REWRITE); script.chmod(0o755)
+
+    a = run_command(["./selfrewrite.sh"], cfg=cfg, echo=False, label="a")
+    b = run_command(["./selfrewrite.sh"], cfg=cfg, echo=False, label="b")
+
+    assert "value 1" in a.run["output"] and "value 2" in b.run["output"]
+    assert a.fields["execution.program_sha256"].value != b.fields["execution.program_sha256"].value
+    # The run that rewrote itself says so.
+    assert "execution.program_sha256" in [d["path"] for d in a.run["drift"]]
+    assert compare([a, b], cfg=cfg).exit_code != 0
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="shell script fixture")
+def test_a_writable_output_file_is_not_input_drift(cfg, tmp_path, monkeypatch):
+    """Only the subject and its script arguments are immutable inputs. A
+    benchmark writing its own results must not read as a changed subject."""
+    monkeypatch.chdir(tmp_path)
+    script = tmp_path / "bench.sh"
+    script.write_text('#!/bin/sh\necho "result 1" > out.txt\necho done\n'); script.chmod(0o755)
+    rec = run_command(["./bench.sh"], cfg=cfg, echo=False, label="a")
+    assert (tmp_path / "out.txt").exists()
+    assert [d["path"] for d in rec.run["drift"]] == []
+
+
+def test_a_file_changing_while_it_is_hashed_is_unknown(tmp_path, monkeypatch):
+    """Hashing narrows the race, it does not close it, so the case where the
+    file moves under the read has to be stated rather than answered."""
+    from ceteris import execution
+
+    target = tmp_path / "moving"
+    target.write_bytes(b"a" * 4096)
+    real_stat = execution.os.stat
+    calls = {"n": 0}
+
+    def shifting_stat(path, *a, **kw):
+        result = real_stat(path, *a, **kw)
+        calls["n"] += 1
+        if calls["n"] > 1 and str(path) == str(target):
+            target.write_bytes(b"b" * 8192)
+            return real_stat(path, *a, **kw)
+        return result
+
+    monkeypatch.setattr(execution.os, "stat", shifting_stat)
+    with pytest.raises(execution.FileChangedWhileReading):
+        execution._sha256(str(target))

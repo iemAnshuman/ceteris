@@ -7,6 +7,7 @@ import sys
 from ceteris import stats
 from ceteris.cli import main
 from ceteris.compare import EXIT_OK, EXIT_WITHIN_NOISE, compare
+from ceteris.model import State
 from ceteris.model import Fingerprint, unknown, value
 from ceteris.render import render
 from ceteris.runner import run_repeated
@@ -171,3 +172,63 @@ def test_a_successful_run_is_unaffected(cfg):
                         run={"exit_code": 0}, metrics={"bw": value(1.0 + i * 0.01)}) for i in range(3)]
     report = compare(runs, cfg=cfg)
     assert not report.failed_runs and report.exit_code == EXIT_OK
+
+
+# --- F04: a value that is not a measurement ----------------------------------
+
+import math
+
+import pytest
+
+
+def _sweep(bad, position):
+    """Three samples per configuration with `bad` dropped in at `position`."""
+    good_a, good_b = [1.0, 1.01, 1.02], [5.0, 5.01, 5.02]
+    good_a = list(good_a); good_a[position] = bad
+    return ([rec("a", "x", v) for v in good_a] + [rec("b", "y", v) for v in good_b])
+
+
+@pytest.mark.parametrize("bad, label", [
+    (float("nan"), "NaN"),
+    (float("inf"), "positive infinity"),
+    (float("-inf"), "negative infinity"),
+    (True, "a boolean"),
+    ("12.5", "a numeric string"),
+])
+@pytest.mark.parametrize("position", [0, 1, 2])
+def test_an_unusable_sample_never_produces_a_signal(cfg, bad, label, position):
+    """Every comparison against NaN is false, so it passed straight through
+    min, median and max and satisfied --require-signal."""
+    report = compare(_sweep(bad, position), vary=["source.commit"], cfg=cfg, require_signal=True)
+    verdict = report.noise[0]
+    assert not verdict.assessed, f"{label} at position {position} was assessed"
+    assert report.exit_code == EXIT_WITHIN_NOISE
+
+
+def test_a_zero_sample_makes_the_relative_method_unassessed(cfg):
+    """gap and spread are ratios; a zero denominator is not a large number."""
+    runs = [rec("a", "x", v) for v in (0.0, 1.0, 1.0)] + [rec("b", "y", v) for v in (5.0, 5.0, 5.0)]
+    verdict = compare(runs, vary=["source.commit"], cfg=cfg).noise[0]
+    assert not verdict.assessed and "strictly positive" in verdict.reason
+
+
+def test_a_negative_sample_is_unassessed_not_inverted(cfg):
+    runs = [rec("a", "x", v) for v in (-1.0, -1.0, -1.0)] + [rec("b", "y", v) for v in (5.0, 5.0, 5.0)]
+    assert not compare(runs, vary=["source.commit"], cfg=cfg).noise[0].assessed
+
+
+def test_an_overflowing_pattern_match_is_failed_extraction_not_infinity():
+    from ceteris.metrics import extract
+
+    got = extract("bandwidth 1e999 GB/s\n", {"bw": r"bandwidth (\S+) GB/s"})
+    assert got["bw"].state is State.UNKNOWN
+    assert "not measurements" in got["bw"].detail
+
+
+def test_a_harness_export_of_nan_is_not_recorded_as_a_number():
+    from ceteris.adapters import _num
+
+    assert math.isnan(float("nan"))
+    assert _num("nan") == "nan"          # kept as evidence of what was exported
+    assert _num("inf") == "inf"
+    assert _num("12.5") == 12.5

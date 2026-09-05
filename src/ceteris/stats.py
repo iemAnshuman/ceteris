@@ -10,6 +10,7 @@ rather than guessing when there are too few repeats to know.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from statistics import median
 from typing import Sequence
@@ -19,6 +20,25 @@ from .config import GATING_SEVERITIES, Config
 from .model import Fingerprint, State
 
 MIN_REPEATS = 3
+
+
+def unusable(v) -> str | None:
+    """Why this value cannot enter a statistic, or None if it can.
+
+    A NaN propagates through min, median and max and comes out the far side
+    as a comparison that satisfied `--require-signal`, because every
+    comparison against NaN is false. A bool is an int to Python and a
+    category to everyone else. Neither is a measurement.
+    """
+    if isinstance(v, bool):
+        return "boolean, not a measurement"
+    if not isinstance(v, (int, float)):
+        return f"not a number ({type(v).__name__})"
+    if math.isnan(v):
+        return "NaN"
+    if math.isinf(v):
+        return "infinite"
+    return None
 
 
 def config_key(fp: Fingerprint, cfg: Config) -> str:
@@ -66,8 +86,20 @@ class ConfigGroup:
         out = []
         for fp in self.members:
             f = fp.metrics.get(metric)
-            if f is not None and f.state is State.VALUE and isinstance(f.value, (int, float)):
+            if f is not None and f.state is State.VALUE and unusable(f.value) is None:
                 out.append(float(f.value))
+        return out
+
+    def rejected(self, metric: str) -> list[str]:
+        """Values present but unusable, with the reason for each."""
+        out = []
+        for fp in self.members:
+            f = fp.metrics.get(metric)
+            if f is None or f.state is not State.VALUE:
+                continue
+            why = unusable(f.value)
+            if why is not None and not isinstance(f.value, list):
+                out.append(f"{fp.label}: {why}")
         return out
 
 
@@ -144,6 +176,13 @@ def noise_verdict(groups: Sequence[ConfigGroup], metric: str) -> NoiseVerdict:
         return NoiseVerdict(metric, None, None, False, False,
                             f"multi-valued: the pattern matched {n} times per run; "
                             "use a pattern that matches once, or a harness adapter")
+    bad = [why for g in groups for why in g.rejected(metric)]
+    if bad:
+        # Present, and not a measurement. Silently dropping these would let
+        # the remaining samples answer a question about a different dataset.
+        shown = "; ".join(bad[:3]) + (f"; and {len(bad) - 3} more" if len(bad) > 3 else "")
+        return NoiseVerdict(metric, None, None, False, False,
+                            f"unusable measurements were recorded for this metric ({shown})")
     per = [s for s in (stats_for(g, metric) for g in groups) if s is not None]
     if not per:
         # Every sample was unknown: the pattern did not match, or the harness
@@ -158,6 +197,15 @@ def noise_verdict(groups: Sequence[ConfigGroup], metric: str) -> NoiseVerdict:
         return NoiseVerdict(
             metric, None, None, False, False,
             f"noise floor unassessed: fewer than {MIN_REPEATS} repeats for {', '.join(thin)}",
+        )
+    non_positive = [s.label for s in per if s.lo <= 0]
+    if non_positive:
+        # gap and spread are relative, so a zero or negative sample makes the
+        # denominator meaningless rather than merely large.
+        return NoiseVerdict(
+            metric, None, None, False, False,
+            "the relative-noise method needs strictly positive samples; "
+            f"{', '.join(sorted(set(non_positive)))} recorded zero or negative values",
         )
     meds = [s.med for s in per]
     lo, hi = min(meds), max(meds)

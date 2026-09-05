@@ -58,10 +58,18 @@ def _scratch(prefix: str) -> str:
 
 
 def _num(x: Any) -> Any:
+    """A harness export value. NaN, infinity and booleans are refused here
+    rather than at the statistics, so the record shows failed extraction
+    instead of a number that quietly poisons every later comparison."""
+    from ..stats import unusable
+
+    if isinstance(x, bool):
+        return x
     try:
-        return float(x)
+        parsed = float(x)
     except (TypeError, ValueError):
         return x
+    return parsed if unusable(parsed) is None else x
 
 
 @dataclass

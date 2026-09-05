@@ -40,10 +40,24 @@ def extract(text: str, patterns: dict[str, str]) -> dict[str, Field]:
             )
             continue
         parsed = [_number(x) for x in found]
+        bad = [raw for raw, p in zip(found, parsed) if _rejects(p)]
+        if bad:
+            out[name] = unknown(
+                f"the pattern matched values that are not measurements: {', '.join(bad[:3])}",
+                provenance=provenance,
+            )
+            continue
         out[name] = value(
             parsed[0] if len(parsed) == 1 else parsed, provenance=provenance
         )
     return out
+
+
+def _rejects(v) -> bool:
+    """A parsed sample that must not be recorded as a measurement."""
+    from .stats import unusable
+
+    return unusable(v) is not None
 
 
 def _number(raw: str):

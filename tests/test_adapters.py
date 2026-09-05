@@ -223,3 +223,59 @@ def test_a_harness_making_no_claim_is_unverified_not_validated():
     does not block on its own either."""
     state, _ = adapters.Hyperfine().validity(adapters.Plan("hyperfine", []), "", ".", 0)
     assert state == "unverified"
+
+
+# --- F07: an export this run did not write ------------------------------------
+
+STALE_EXPORT = json.dumps({"results": [{"command": "an earlier run", "median": 0.5, "min": 0.4}]})
+
+
+def test_a_caller_supplied_export_that_the_run_never_wrote_is_stale(tmp_path):
+    """A plausible file sitting at the export path was read as this run's
+    result, so a benchmark that failed to run at all reported numbers."""
+    out = tmp_path / "results.json"
+    out.write_text(STALE_EXPORT)
+    plan = adapters.Hyperfine().plan(["hyperfine", "--export-json", "results.json", "true"], str(tmp_path))
+    assert plan.output.endswith("results.json") and plan.before[0] == "present"
+    got = adapters.Hyperfine().collect(plan, "", str(tmp_path), 0)   # nothing rewrote it
+    assert got["hyperfine._adapter"].state is State.UNKNOWN
+    assert "unchanged since before the run" in got["hyperfine._adapter"].detail
+
+
+def test_a_freshly_written_export_is_accepted(tmp_path):
+    out = tmp_path / "results.json"
+    out.write_text(STALE_EXPORT)
+    plan = adapters.Hyperfine().plan(["hyperfine", "--export-json", "results.json", "true"], str(tmp_path))
+    out.write_text(json.dumps({"results": [{"command": "true", "median": 0.25, "min": 0.2}]}))
+    got = adapters.Hyperfine().collect(plan, "", str(tmp_path), 0)
+    assert got["hyperfine.median_s"].value == 0.25
+
+
+def test_identical_content_rewritten_within_one_timestamp_tick_is_still_stale(tmp_path):
+    """Timestamp-only freshness is insufficient, and so is content-only: the
+    snapshot compares size, mtime, inode and digest together."""
+    out = tmp_path / "results.json"
+    out.write_text(STALE_EXPORT)
+    plan = adapters.Hyperfine().plan(["hyperfine", "--export-json", "results.json", "true"], str(tmp_path))
+    os.utime(out, ns=(plan.before[2], plan.before[2]))     # same mtime, same bytes
+    got = adapters.Hyperfine().collect(plan, "", str(tmp_path), 0)
+    assert got["hyperfine._adapter"].state is State.UNKNOWN
+
+
+def test_an_export_written_somewhere_else_leaves_the_planned_path_stale(tmp_path):
+    out = tmp_path / "results.json"
+    out.write_text(STALE_EXPORT)
+    plan = adapters.Hyperfine().plan(["hyperfine", "--export-json", "results.json", "true"], str(tmp_path))
+    (tmp_path / "elsewhere.json").write_text(json.dumps({"results": [{"command": "true", "median": 1.0}]}))
+    got = adapters.Hyperfine().collect(plan, "", str(tmp_path), 0)
+    assert got["hyperfine._adapter"].state is State.UNKNOWN
+
+
+def test_a_caller_owned_export_is_never_deleted(tmp_path):
+    """Freshness must not be arranged by destroying the user's file."""
+    out = tmp_path / "results.json"
+    out.write_text(STALE_EXPORT)
+    plan = adapters.Hyperfine().plan(["hyperfine", "--export-json", "results.json", "true"], str(tmp_path))
+    assert not plan.added_output
+    adapters.Hyperfine().collect(plan, "", str(tmp_path), 0)
+    assert out.read_text() == STALE_EXPORT

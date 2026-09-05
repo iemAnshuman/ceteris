@@ -18,6 +18,7 @@ welcome contribution.
 from __future__ import annotations
 
 import glob
+import hashlib
 import json
 import os
 import re
@@ -72,6 +73,28 @@ def _num(x: Any) -> Any:
     return parsed if unusable(parsed) is None else x
 
 
+def snapshot(path: str | None) -> tuple:
+    """What the export file looked like before the run.
+
+    Content digest as well as metadata, because a filesystem whose timestamps
+    have coarse granularity can rewrite a file inside one tick, and because
+    an unchanged mtime on changed content is the case that would otherwise
+    pass. Cheap: these files are kilobytes.
+    """
+    if not path:
+        return ("no-output-file",)
+    try:
+        st = os.stat(path)
+    except OSError:
+        return ("absent",)
+    try:
+        with open(path, "rb") as handle:
+            digest = hashlib.sha256(handle.read()).hexdigest()
+    except OSError as exc:
+        return ("unreadable", str(exc))
+    return ("present", st.st_size, st.st_mtime_ns, st.st_ino, digest)
+
+
 @dataclass
 class Plan:
     """What the adapter decided before the run."""
@@ -80,6 +103,10 @@ class Plan:
     argv: list[str]                 # possibly augmented command to actually run
     output: str | None = None       # file to read afterwards, if any
     added_output: bool = False      # we injected the export flag ourselves
+    # The export file as it stood before launch. An identical snapshot
+    # afterwards means the harness never wrote it, and whatever is there
+    # belongs to some earlier run.
+    before: tuple = ()
 
 
 class Adapter:
@@ -111,6 +138,20 @@ class Adapter:
         return None
 
     # -- helpers -------------------------------------------------------------
+    def _stale(self, plan: "Plan") -> str | None:
+        """Why this export cannot be this run's, or None."""
+        if not plan.before:
+            return None
+        now = snapshot(plan.output)
+        if now == ("absent",):
+            return f"{plan.output} was never written by this run"
+        if now == plan.before:
+            return (
+                f"{plan.output} is unchanged since before the run started, so it is "
+                f"an earlier run's export; this run produced no result there"
+            )
+        return None
+
     def _read_json(self, path: str | None) -> tuple[Any, str | None]:
         if not path:
             return None, "no output file"
@@ -171,11 +212,16 @@ class Hyperfine(Adapter):
     def plan(self, argv, cwd):
         out = _arg_value(argv, "--export-json")
         if out:
-            return Plan(self.name, list(argv), os.path.join(cwd, out))
+            given = os.path.join(cwd, out)
+            return Plan(self.name, list(argv), given, before=snapshot(given))
         path = _scratch("ceteris-hyperfine-")
-        return Plan(self.name, list(argv) + ["--export-json", path], path, added_output=True)
+        return Plan(self.name, list(argv) + ["--export-json", path], path,
+                    added_output=True, before=snapshot(path))
 
     def collect(self, plan, stdout, cwd, started):
+        stale = self._stale(plan)
+        if stale:
+            return self._failed(stale)
         data, err = self._read_json(plan.output)
         if err:
             return self._failed(err)
@@ -203,11 +249,16 @@ class GoogleBenchmark(Adapter):
     def plan(self, argv, cwd):
         out = _arg_value(argv, "--benchmark_out")
         if out:
-            return Plan(self.name, list(argv), os.path.join(cwd, out))
+            given = os.path.join(cwd, out)
+            return Plan(self.name, list(argv), given, before=snapshot(given))
         path = _scratch("ceteris-gbench-")
-        return Plan(self.name, list(argv) + [f"--benchmark_out={path}", "--benchmark_out_format=json"], path, True)
+        return Plan(self.name, list(argv) + [f"--benchmark_out={path}", "--benchmark_out_format=json"],
+                    path, True, before=snapshot(path))
 
     def collect(self, plan, stdout, cwd, started):
+        stale = self._stale(plan)
+        if stale:
+            return self._failed(stale)
         data, err = self._read_json(plan.output)
         if err:
             return self._failed(err)
@@ -258,11 +309,16 @@ class PytestBenchmark(Adapter):
     def plan(self, argv, cwd):
         out = _arg_value(argv, "--benchmark-json")
         if out:
-            return Plan(self.name, list(argv), os.path.join(cwd, out))
+            given = os.path.join(cwd, out)
+            return Plan(self.name, list(argv), given, before=snapshot(given))
         path = _scratch("ceteris-pytest-")
-        return Plan(self.name, list(argv) + [f"--benchmark-json={path}"], path, True)
+        return Plan(self.name, list(argv) + [f"--benchmark-json={path}"], path, True,
+                    before=snapshot(path))
 
     def collect(self, plan, stdout, cwd, started):
+        stale = self._stale(plan)
+        if stale:
+            return self._failed(stale)
         data, err = self._read_json(plan.output)
         if err:
             return self._failed(err)
@@ -281,9 +337,13 @@ class JMH(Adapter):
 
     def plan(self, argv, cwd):
         out = _arg_value(argv, "-rff") or "jmh-result.json"
-        return Plan(self.name, list(argv), os.path.join(cwd, out))
+        given = os.path.join(cwd, out)
+        return Plan(self.name, list(argv), given, before=snapshot(given))
 
     def collect(self, plan, stdout, cwd, started):
+        stale = self._stale(plan)
+        if stale:
+            return self._failed(stale)
         data, err = self._read_json(plan.output)
         if err:
             return self._failed(err)

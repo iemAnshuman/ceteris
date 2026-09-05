@@ -334,6 +334,10 @@ def verify(root, receipt_line: str, *, require_pass: bool = False,
         else:
             notes.append("the report was recomputed from the plan and the records and agreed")
 
+    # Everything above is about whether the bundle is genuine. What follows
+    # is about whether it is sufficient for this use, which is a different
+    # question and must not be reported as tampering.
+    integrity = not problems
     level = manifest.get("availability_level")
     if required_level and LEVELS.index(level) < LEVELS.index(required_level):
         problems.append(
@@ -343,7 +347,7 @@ def verify(root, receipt_line: str, *, require_pass: bool = False,
 
     acceptance = (report.get("dimensions") or {}).get("acceptance")
     result = Verification(
-        integrity=not problems,
+        integrity=integrity,
         acceptance=acceptance,
         level=level,
         producer_authentication=manifest.get("producer_authentication", "none"),

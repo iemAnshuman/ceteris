@@ -41,7 +41,7 @@ Homepage = "https://github.com/iemAnshuman/ceteris"
 Issues = "https://github.com/iemAnshuman/ceteris/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-benchmark>=4"]
+dev = ["pytest>=7", "pytest-benchmark>=4", "pyyaml>=6"]  # pyyaml parses the workflow files under test
 
 [project.scripts]
 ceteris = "ceteris.cli:main"

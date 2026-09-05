@@ -133,3 +133,37 @@ def test_no_privileged_event_context_is_used(v2):
 
 def test_the_python_version_input_does_not_claim_to_set_the_subject_runtime(prose):
     assert "does not redefine the subject's runtime" in prose
+
+
+# --- the file is real YAML ----------------------------------------------------
+
+
+def test_every_workflow_file_parses_as_yaml():
+    """Substring checks cannot see a broken block scalar; this can."""
+    yaml = pytest.importorskip("yaml")
+    for path in (V1, V2, ROOT / ".github" / "workflows" / "ci.yml",
+                 ROOT / ".github" / "workflows" / "release.yml"):
+        yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def test_the_action_declares_the_documented_outputs():
+    yaml = pytest.importorskip("yaml")
+    parsed = yaml.safe_load(V2.read_text(encoding="utf-8"))
+    assert set(parsed["outputs"]) == {"acceptance", "receipt", "campaign-id"}
+    assert parsed["runs"]["using"] == "composite"
+
+
+def test_every_run_step_names_its_shell():
+    yaml = pytest.importorskip("yaml")
+    parsed = yaml.safe_load(V2.read_text(encoding="utf-8"))
+    for step in parsed["runs"]["steps"]:
+        if "run" in step:
+            assert step.get("shell"), f"step {step.get('name')!r} has no shell"
+
+
+def test_a_build_that_is_missing_the_campaign_runner_says_so_rather_than_going_green(v2):
+    """An empty upload behind a green check would imply a comparison that
+    never happened."""
+    assert "has no 'campaign run'" in v2
+    assert "no measurements were taken" in v2
+    assert "acceptance=not_evaluated" in v2

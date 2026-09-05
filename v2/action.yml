@@ -179,22 +179,34 @@ runs:
         CAMPAIGN_ID: ${{ steps.prepare.outputs.campaign_id }}
       run: |
         set -uo pipefail
-        # 9. The evaluation's own exit code is propagated, never lost through
-        #    a pipeline.
-        ceteris plan "$STORE_ROOT/experiment.json" -o "$STORE_ROOT/plan.echo.json" >/dev/null
+        # Campaign execution is the one piece of this workflow that is not
+        # implemented yet. The action says so plainly rather than uploading an
+        # empty directory and letting a green check imply a comparison
+        # happened.
+        if ! ceteris campaign --help >/dev/null 2>&1; then
+          echo "::error::this ceteris build has no 'campaign run'; the plan was frozen at $STORE_ROOT/plan.json but no measurements were taken" >&2
+          echo "acceptance=not_evaluated" >> "$GITHUB_OUTPUT"
+          echo "receipt=" >> "$GITHUB_OUTPUT"
+          echo "exit_code=2" >> "$GITHUB_OUTPUT"
+          printf 'no measurements were taken: this ceteris build has no campaign runner.\nThe frozen plan is in the uploaded artifact.\n' > "$STORE_ROOT/summary.txt"
+          exit 0
+        fi
         code=0
-        ceteris bundle inspect "$STORE_ROOT/bundle" > "$STORE_ROOT/summary.txt" 2>&1 || code=$?
-        acceptance="not_evaluated"
+        ceteris campaign run --plan "$STORE_ROOT/plan.json" \
+          --campaign-id "$CAMPAIGN_ID" --store "$STORE_ROOT" || code=$?
+        # 9. The evaluation's own exit code is carried out of the pipeline.
+        acceptance=not_evaluated
+        receipt=""
         if [ -f "$STORE_ROOT/bundle/report.json" ]; then
-          acceptance="$(python -c "
-import json,sys
-print(json.load(open(sys.argv[1]))['dimensions']['acceptance'])" "$STORE_ROOT/bundle/report.json")"
+          acceptance="$(ceteris bundle inspect "$STORE_ROOT/bundle" --acceptance 2>/dev/null || echo not_evaluated)"
+          receipt="$(cat "$STORE_ROOT/receipt.txt" 2>/dev/null || true)"
+          ceteris bundle inspect "$STORE_ROOT/bundle" > "$STORE_ROOT/summary.txt" 2>&1 || true
         fi
         {
           echo "acceptance=$acceptance"
-          echo "receipt=$(cat "$STORE_ROOT/receipt.txt" 2>/dev/null || true)"
+          echo "receipt=$receipt"
+          echo "exit_code=$code"
         } >> "$GITHUB_OUTPUT"
-        echo "exit_code=$code" >> "$GITHUB_OUTPUT"
 
     # 8, 9. Summary and upload happen even when the comparison failed, with an
     #       invocation-unique name so repeated runs never overwrite each other.

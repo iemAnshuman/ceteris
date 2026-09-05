@@ -1,0 +1,238 @@
+name: ceteris v2
+description: >-
+  Run a reviewed benchmark experiment on the base and head of a pull request
+  and report whether the comparison satisfies its declared policy.
+branding:
+  icon: check-circle
+  color: green
+
+# Version 2 of the action, for the planned workflow. Version 1 lives at the
+# repository root and keeps its own input meanings; a pinned workflow never
+# changes behaviour because this file exists.
+
+inputs:
+  experiment:
+    description: >-
+      Path to the reviewed experiment definition, relative to the repository
+      root. It is read from the BASE revision, so a pull request cannot lower
+      a threshold, drop a metric, widen declared variation or switch off a
+      correctness check by editing it.
+    required: true
+  base-ref:
+    description: Explicit base commit. Derived from the event when empty.
+    default: ""
+  candidate-ref:
+    description: Explicit candidate commit. Derived from the event when empty.
+    default: ""
+  policy-source:
+    description: >-
+      Where the trusted experiment and policy come from. `base` reads them
+      from the base revision. `explicit` reads them from a separately supplied
+      reviewed location given in `policy-path`.
+    default: base
+  policy-path:
+    description: Path to the reviewed policy when policy-source is explicit.
+    default: ""
+  artifact-name:
+    description: >-
+      Prefix for the uploaded bundle and report. The campaign UUID is appended,
+      so repeated invocations in one workflow never collide.
+    default: ceteris
+  python-version:
+    description: >-
+      The interpreter that runs ceteris itself. It does not redefine the
+      subject's runtime; a Python workload declares its own interpreter in the
+      experiment.
+    default: "3.12"
+  store-root:
+    description: Root for campaign directories. Each invocation creates a new one.
+    default: ""
+  build:
+    description: >-
+      Shell script that builds a variant, run inside that variant's worktree.
+      Its exact contents are recorded in the campaign.
+    default: ""
+
+outputs:
+  acceptance:
+    description: passed, passed_with_waivers, failed, inconclusive, or not_evaluated.
+    value: ${{ steps.evaluate.outputs.acceptance }}
+  receipt:
+    description: The ceteris-receipt line for the bundle this run produced.
+    value: ${{ steps.evaluate.outputs.receipt }}
+  campaign-id:
+    description: The campaign UUID, which is also the artifact name suffix.
+    value: ${{ steps.prepare.outputs.campaign_id }}
+
+runs:
+  using: composite
+  steps:
+    # 1. Install ceteris before entering any candidate worktree, so the tool
+    #    doing the measuring never comes from the revision under test.
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install ceteris from the action's own source
+      shell: bash
+      run: python -m pip install -q "$ACTION_PATH"
+      env:
+        ACTION_PATH: ${{ github.action_path }}/..
+
+    - name: Prepare
+      id: prepare
+      shell: bash
+      env:
+        # Through the environment, never interpolated into the script. A
+        # branch named `; rm -rf /` is a branch name, not a command.
+        BASE_REF: ${{ inputs.base-ref }}
+        CANDIDATE_REF: ${{ inputs.candidate-ref }}
+        EVENT_BASE: ${{ github.event.pull_request.base.sha }}
+        EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
+        FALLBACK_BEFORE: ${{ github.event.before }}
+        FALLBACK_SHA: ${{ github.sha }}
+        STORE_ROOT: ${{ inputs.store-root }}
+      run: |
+        set -euo pipefail
+        base="${BASE_REF:-${EVENT_BASE:-$FALLBACK_BEFORE}}"
+        candidate="${CANDIDATE_REF:-${EVENT_HEAD:-$FALLBACK_SHA}}"
+        # 3. Both refs must actually be obtainable. A failed fetch is never
+        #    ignored in favour of whatever happens to be checked out.
+        for ref in "$base" "$candidate"; do
+          if [ -z "$ref" ]; then
+            echo "::error::could not determine both revisions to compare" >&2
+            exit 3
+          fi
+          git fetch -q --no-tags origin "$ref" 2>/dev/null || true
+          if ! git cat-file -e "${ref}^{commit}" 2>/dev/null; then
+            echo "::error::revision $ref could not be obtained; refusing to compare a different one" >&2
+            exit 3
+          fi
+        done
+        campaign="$(python -c 'import uuid; print(uuid.uuid4())')"
+        root="${STORE_ROOT:-$RUNNER_TEMP/ceteris}"
+        mkdir -p "$root"
+        {
+          echo "base=$base"
+          echo "candidate=$candidate"
+          echo "campaign_id=$campaign"
+          echo "store_root=$root"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Freeze the plan
+      id: plan
+      shell: bash
+      env:
+        EXPERIMENT: ${{ inputs.experiment }}
+        POLICY_SOURCE: ${{ inputs.policy-source }}
+        POLICY_PATH: ${{ inputs.policy-path }}
+        BASE: ${{ steps.prepare.outputs.base }}
+        CANDIDATE: ${{ steps.prepare.outputs.candidate }}
+        STORE_ROOT: ${{ steps.prepare.outputs.store_root }}
+      run: |
+        set -euo pipefail
+        # 2. The experiment comes from the base revision, or from an explicitly
+        #    reviewed location. Never from the candidate.
+        if [ "$POLICY_SOURCE" = "explicit" ]; then
+          [ -n "$POLICY_PATH" ] || { echo "::error::policy-source is explicit but policy-path is empty" >&2; exit 3; }
+          cp "$POLICY_PATH" "$STORE_ROOT/experiment.json"
+        else
+          git show "$BASE:$EXPERIMENT" > "$STORE_ROOT/experiment.json" \
+            || { echo "::error::$EXPERIMENT does not exist at the base revision" >&2; exit 3; }
+        fi
+        # 5. Frozen outside either worktree, before anything is built.
+        ceteris plan "$STORE_ROOT/experiment.json" \
+          -o "$STORE_ROOT/plan.json" \
+          --revision "base=$BASE" --revision "candidate=$CANDIDATE"
+        echo "plan=$STORE_ROOT/plan.json" >> "$GITHUB_OUTPUT"
+
+    - name: Create isolated worktrees
+      id: worktrees
+      shell: bash
+      env:
+        BASE: ${{ steps.prepare.outputs.base }}
+        CANDIDATE: ${{ steps.prepare.outputs.candidate }}
+        STORE_ROOT: ${{ steps.prepare.outputs.store_root }}
+        BUILD: ${{ inputs.build }}
+      run: |
+        set -euo pipefail
+        # 4. The user's checkout and active branch are left exactly as they were.
+        for variant in base candidate; do
+          case "$variant" in
+            base) ref="$BASE" ;;
+            *)    ref="$CANDIDATE" ;;
+          esac
+          git worktree add --detach -q "$STORE_ROOT/worktrees/$variant" "$ref"
+        done
+        if [ -n "$BUILD" ]; then
+          printf '%s\n' "$BUILD" > "$STORE_ROOT/build.sh"
+          for variant in base candidate; do
+            ( cd "$STORE_ROOT/worktrees/$variant" && bash -eo pipefail "$STORE_ROOT/build.sh" ) \
+              || { echo "::error::the build failed for $variant; no timing slot runs against a stale binary" >&2; exit 1; }
+          done
+        fi
+
+    - name: Evaluate
+      id: evaluate
+      shell: bash
+      env:
+        STORE_ROOT: ${{ steps.prepare.outputs.store_root }}
+        CAMPAIGN_ID: ${{ steps.prepare.outputs.campaign_id }}
+      run: |
+        set -uo pipefail
+        # 9. The evaluation's own exit code is propagated, never lost through
+        #    a pipeline.
+        ceteris plan "$STORE_ROOT/experiment.json" -o "$STORE_ROOT/plan.echo.json" >/dev/null
+        code=0
+        ceteris bundle inspect "$STORE_ROOT/bundle" > "$STORE_ROOT/summary.txt" 2>&1 || code=$?
+        acceptance="not_evaluated"
+        if [ -f "$STORE_ROOT/bundle/report.json" ]; then
+          acceptance="$(python -c "
+import json,sys
+print(json.load(open(sys.argv[1]))['dimensions']['acceptance'])" "$STORE_ROOT/bundle/report.json")"
+        fi
+        {
+          echo "acceptance=$acceptance"
+          echo "receipt=$(cat "$STORE_ROOT/receipt.txt" 2>/dev/null || true)"
+        } >> "$GITHUB_OUTPUT"
+        echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+
+    # 8, 9. Summary and upload happen even when the comparison failed, with an
+    #       invocation-unique name so repeated runs never overwrite each other.
+    - name: Summary
+      if: always()
+      shell: bash
+      env:
+        STORE_ROOT: ${{ steps.prepare.outputs.store_root }}
+      run: |
+        {
+          echo '## ceteris'
+          echo '```'
+          cat "$STORE_ROOT/summary.txt" 2>/dev/null || echo 'no summary was produced'
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ${{ inputs.artifact-name }}-${{ steps.prepare.outputs.campaign_id }}
+        path: ${{ steps.prepare.outputs.store_root }}
+        if-no-files-found: warn
+
+    # 10. Only the worktrees this action created, and only after the evidence
+    #     above has been uploaded.
+    - name: Remove the action's own worktrees
+      if: always()
+      shell: bash
+      env:
+        STORE_ROOT: ${{ steps.prepare.outputs.store_root }}
+      run: |
+        for variant in base candidate; do
+          git worktree remove --force "$STORE_ROOT/worktrees/$variant" 2>/dev/null || true
+        done
+
+    - name: Propagate the evaluation result
+      if: always()
+      shell: bash
+      env:
+        CODE: ${{ steps.evaluate.outputs.exit_code }}
+      run: exit "${CODE:-0}"

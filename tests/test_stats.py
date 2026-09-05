@@ -290,3 +290,24 @@ def test_naming_one_file_twice_is_a_usage_error(tmp_path, monkeypatch, second):
     with pytest.raises(SystemExit) as exc:
         main(["compare", str(path), twin, str(other)])
     assert exc.value.code == EXIT_USAGE
+
+
+def test_a_configuration_with_no_value_for_the_metric_is_not_silently_dropped(cfg):
+    """The gap was computed between whichever configurations happened to
+    carry the metric, and the third disappeared from the answer."""
+    def with_metric(label, commit, bw):
+        return Fingerprint({"source.commit": value(commit)}, distinct_meta(label),
+                           run={"exit_code": 0}, metrics={"bw": value(bw)})
+
+    def without_metric(label, commit):
+        return Fingerprint({"source.commit": value(commit)}, distinct_meta(label),
+                           run={"exit_code": 0})
+
+    runs = ([with_metric("a", "x", v) for v in (1.0, 1.01, 1.02)]
+            + [with_metric("b", "y", v) for v in (5.0, 5.01, 5.02)]
+            + [without_metric("c", "z") for _ in range(3)])
+    report = compare(runs, vary=["source.commit"], cfg=cfg, require_signal=True)
+    verdict = report.noise[0]
+    assert not verdict.assessed
+    assert "produced no value" in verdict.reason
+    assert report.exit_code == EXIT_WITHIN_NOISE

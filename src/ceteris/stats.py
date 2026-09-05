@@ -192,6 +192,15 @@ def noise_verdict(groups: Sequence[ConfigGroup], metric: str) -> NoiseVerdict:
                             "no configuration produced a value for this metric")
     if len(per) < 2:
         return NoiseVerdict(metric, None, None, False, False, "fewer than two configurations carry this metric")
+    silent = [g.label for g in groups if stats_for(g, metric) is None]
+    if silent:
+        # The gap was computed between whichever configurations happened to
+        # carry the metric, and the rest disappeared from the answer.
+        return NoiseVerdict(
+            metric, None, None, False, False,
+            f"{', '.join(silent)} produced no value for this metric, so a gap "
+            f"across the compared configurations cannot be assessed",
+        )
     thin = [s.label for s in per if s.n < MIN_REPEATS]
     if thin:
         return NoiseVerdict(

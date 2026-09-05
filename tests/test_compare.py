@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from ceteris.render import render
 from ceteris.compare import (
     EXIT_INDETERMINATE,
     EXIT_OK,
@@ -135,8 +136,10 @@ def test_field_missing_from_one_fingerprint_is_indeterminate(cfg):
 def test_informational_difference_does_not_gate(cfg):
     """job_id differs on every pair of runs ever. If it gated, nobody would
     keep the tool switched on."""
-    a = fp("run-a", scheduler__job_id="12345")
-    b = fp("run-b", scheduler__job_id="12346")
+    # A gating field that matches, so this isolates the informational one
+    # rather than tripping the empty-capture rule.
+    a = fp("run-a", source__commit="a1b2c3d", scheduler__job_id="12345")
+    b = fp("run-b", source__commit="a1b2c3d", scheduler__job_id="12346")
     report = compare([a, b], cfg=cfg)
     assert report.exit_code == EXIT_OK
     assert result_for(report, "scheduler.job_id").classification is (
@@ -296,3 +299,33 @@ def test_violation_outranks_indeterminate_in_the_exit_code(cfg):
     report = compare([a, b], cfg=cfg)
     assert report.violations and report.indeterminates
     assert report.exit_code == EXIT_UNDECLARED
+
+
+# --- F12: a comparison of nothing is not a comparison -------------------------
+
+
+def test_two_empty_captures_do_not_compare_successfully(cfg):
+    """They reported "matched on 0 other fields" and exit 0."""
+    from ceteris.model import Fingerprint
+
+    a = Fingerprint({}, {"label": "a", "captured_at": "t1"})
+    b = Fingerprint({}, {"label": "b", "captured_at": "t2"})
+    report = compare([a, b], cfg=cfg)
+    assert report.uncovered == ["a", "b"]
+    assert report.exit_code == EXIT_INDETERMINATE
+    assert "NO EVIDENCE CAPTURED" in render(report)
+
+
+def test_a_capture_of_only_informational_fields_certifies_nothing(cfg):
+    a = fp("run-a", scheduler__job_id="1")
+    b = fp("run-b", scheduler__job_id="2")
+    assert compare([a, b], cfg=cfg).exit_code == EXIT_INDETERMINATE
+
+
+def test_one_real_capture_against_an_empty_one_is_named(cfg):
+    from ceteris.model import Fingerprint
+
+    real = fp("real", source__commit="abc")
+    empty = Fingerprint({}, {"label": "empty", "captured_at": "t2"})
+    report = compare([real, empty], cfg=cfg)
+    assert report.uncovered == ["empty"]

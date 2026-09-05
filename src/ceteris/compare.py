@@ -157,6 +157,10 @@ class Report:
     # Identity of the severity and comparator maps this ran under. They decide
     # which fields gate, so a verdict is only meaningful together with them.
     config_digest: str = ""
+    # Records that carry no gating evidence at all. Two empty captures used
+    # to compare successfully and report "matched on 0 other fields": a
+    # comparison of nothing is not a comparison. See design F12.
+    uncovered: list = field(default_factory=list)
 
     def by_class(self, *classes: Classification) -> list[FieldResult]:
         wanted = set(classes)
@@ -180,7 +184,7 @@ class Report:
             return EXIT_UNDECLARED
         if self.indeterminates:
             return EXIT_INDETERMINATE
-        if self.failed_runs or self.drifted:
+        if self.failed_runs or self.drifted or self.uncovered:
             return EXIT_INDETERMINATE
         if self.strict and (self.constant_declarations or self.unmatched_declarations):
             return EXIT_UNDECLARED
@@ -400,6 +404,10 @@ def compare(
         elif all(r.verdict is Verdict.MATCH for r in covered):
             constant.append(pattern)
 
+    uncovered = [
+        fp.label for fp in fingerprints
+        if not any(cfg.severity_of(p) in GATING_SEVERITIES for p in fp.fields)
+    ]
     confounds = _confounds(results)
     configs = stats.group_configs(fingerprints, cfg)
     noise = [stats.noise_verdict(configs, m) for m in stats.metric_names(configs)]
@@ -426,6 +434,7 @@ def compare(
         warnings=warnings,
         confounds=confounds,
         config_digest=_config_digest(cfg),
+        uncovered=uncovered,
     )
 
 

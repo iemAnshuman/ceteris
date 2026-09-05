@@ -172,6 +172,12 @@ def render(report: Report) -> str:
     out.extend(_results_table(report))
     out.extend(_noise_section(report))
 
+    if report.uncovered:
+        out.append("NO EVIDENCE CAPTURED (nothing here can be certified):")
+        for label in report.uncovered:
+            out.append(f"  {label:<20} carries no gating fields; there is nothing to compare")
+        out.append("")
+
     if report.failed_runs:
         out.append("THE BENCHMARK FAILED (nothing here can be certified):")
         for f in report.failed_runs:
@@ -278,6 +284,7 @@ def to_json(report: Report) -> dict[str, Any]:
         "exit_code": report.exit_code,
         "matched": report.matched_count,
         "warnings": report.warnings,
+        "uncovered": report.uncovered,
         "failed_runs": [
             {"run": f.label, "exit_code": f.run.get("exit_code")} for f in report.failed_runs
         ],

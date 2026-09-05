@@ -128,6 +128,37 @@ flow needs, each piece pure and separately testable:
 New commands: `ceteris plan`, `ceteris migrate`, `ceteris bundle verify`,
 `ceteris bundle inspect`.
 
+### Integrations and the report page (WP12 to WP14)
+
+- **`v2/action.yml`** is a new major version of the GitHub Action; version 1
+  keeps its own input meanings so no pinned workflow changes behaviour. The
+  experiment is read from the *base* revision, so a pull request cannot lower
+  a threshold, drop a metric, widen declared variation or switch off a
+  correctness check by editing it. ceteris installs before any candidate
+  worktree exists. Both revisions must actually be obtainable; a failed fetch
+  never proceeds against whatever happens to be checked out. Every input
+  reaches the shell through the environment rather than being interpolated
+  into a script. The summary and the upload happen even when the comparison
+  failed, under an invocation-unique name, and cleanup touches only the
+  worktrees the action created. It posts nothing.
+- **The pytest plugin** treats one session as one outer execution. Twenty
+  pairs means twenty sessions per variant, never twenty inner rounds in one.
+  It records the session's own outcome, so a test failure is failed
+  correctness for its scope and another benchmark producing numbers does not
+  cover for it. `--ceteris-expect-case` makes a case that never appeared
+  incomplete evidence. `CETERIS_PARENT_RUN_ID` links a wrapped session to the
+  wrapper's run so one session is never counted as two measurements.
+- **`nodes_evidence`** keeps per-node evidence per node, with the multiset as
+  a derived view rather than the storage. A missing, duplicated, malformed or
+  wrong-plan response are four named outcomes, not silence. Node IDs are
+  campaign-local pseudonyms; a real host name is optional disclosure. The
+  fan-out probe's own affinity is labelled as the probe's, never offered as
+  the benchmark's.
+- **`html`** renders a static report that opens offline: no network, no
+  script, every supplied string escaped, colour never the only signal, and an
+  execution-order plot beside a table of the same numbers. It displays a
+  report and computes nothing.
+
 ### Migration
 
 Certificates issued before this release report a configuration mismatch,

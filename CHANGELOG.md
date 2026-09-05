@@ -1,5 +1,79 @@
 # Changelog
 
+## 0.4.0 (unreleased)
+
+The twelve correctness repairs in Section 3 of [the design](docs/DESIGN.md).
+Each was reproduced first, each has a regression test named for its issue,
+and each is its own commit. Every one of them is a case where the tool
+could report a false success.
+
+### Certificates say only what they can prove (format 2, tightened)
+
+- **F01** The line's *displayed* claims were unauthenticated. Editing
+  `verdict=confounded` to `verdict=ok` still printed `verified: ok` and
+  exited 0, because the digest bound the recomputed report while `verify`
+  echoed the line's own words back. Every displayed field is now recomputed
+  and checked, the verdict vocabulary is closed, and verification separates
+  *this line honestly describes these records* from *the comparison passed*.
+  `verify --require-pass` asks the second question; exit 5 is an integrity
+  mismatch.
+
+### Differences that were reported as matches
+
+- **F02** Token sorting made `-n 2 -N 4` equal to `-n 4 -N 2`, and
+  `-I a -I b` equal to its reverse. Command lines and flag strings now
+  compare in order, `flagset` is retained only as a named legacy comparator,
+  and each launcher family has its own option grammar. A launcher option
+  outside its grammar makes the decomposition unknown instead of guessed.
+- **F03** Subject identity was collected after the command finished, so a
+  program that rewrote itself was recorded as the thing it became,
+  identically on every run, with no drift. Identity is taken before launch
+  and again after, and the difference is drift.
+- **F05** One record offered three times produced three samples, a zero
+  spread and a signal. An execution now contributes at most once; copies,
+  repeated arguments, symlinks and repeated object references are refused.
+- **F12** Two empty captures compared successfully. A record carrying no
+  gating evidence certifies nothing, and a configuration that produced no
+  value for a metric no longer vanishes from the noise assessment.
+
+### Results that were not results
+
+- **F04** NaN satisfied `--require-signal`, because every comparison against
+  NaN is false. NaN, infinities, booleans and malformed numbers are refused
+  before any statistic, and the relative-noise method states that it needs
+  strictly positive samples.
+- **F06** `Result is : INVALID` arrived as a string metric that no statistic
+  read, so the comparison passed. A harness verdict is now evidence, not a
+  measurement, and a harness that declares its own run invalid has failed
+  whatever the exit status was. Absence of a claim is *unverified*.
+- **F07** A pre-existing export was read as this run's result. Export files
+  are snapshotted before launch and an unchanged file is rejected as stale.
+  Caller-owned files are never deleted to make freshness easy.
+- **F08** Two equally specific policy rules resolved by dictionary order, so
+  the same policy written in another order gated differently while hashing
+  the same. A tie is refused with both patterns named, and the policy
+  identity now includes the engine that read it.
+
+### Evidence that was lost
+
+- **F09** Interrupting a repeat discarded the repeats that had already run.
+  Each record is written before the next run starts, and writes are atomic.
+- **F10** All output accumulated in memory to keep a 64 KiB tail. Output
+  streams through a bounded spool that records what it dropped, and
+  interruption terminates the process group rather than one process.
+- **F11** Comparison grouped on canonical values while drift compared whole
+  fields, so a provenance string changing marked a run uncertifiable. One
+  equivalence rule serves both. The pytest plugin captured only at session
+  end and wrote an empty drift list; it now observes both ends, or says it
+  could not.
+
+### Migration
+
+Certificates issued before this release report a configuration mismatch,
+because F02 and F08 changed the policy identity. That is the mechanism
+working: re-issue them with `ceteris compare --certify`. Version 1
+certificates are refused outright rather than checked.
+
 ## 0.3.0 (2026-09-04)
 
 Fixes found by reviewing every path the tool can fail open on. Each shipped

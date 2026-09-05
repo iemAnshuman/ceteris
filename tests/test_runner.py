@@ -354,3 +354,45 @@ def test_a_record_is_written_whole_or_not_at_all(tmp_path, cfg, monkeypatch):
         store_mod.save(record, tmp_path / "runs")
     monkeypatch.setattr(store_mod.os, "replace", real_replace)
     assert store_mod.all_runs(tmp_path / "runs") == [], "no partial record is readable"
+
+
+# --- F11: drift asks the same question comparison asks ------------------------
+
+
+def test_provenance_changing_is_not_the_environment_changing(cfg):
+    """Comparison grouped on the canonical value while drift compared whole
+    Field objects, so reading the same flags from a different source, or with
+    different spacing, marked the run uncertifiable."""
+    from ceteris.model import Field, State
+    from ceteris.runner import _drift
+
+    before = {"build.cxx_flags": Field(State.VALUE, "-O3 -g", provenance="--cxx-flags")}
+    after = {"build.cxx_flags": Field(State.VALUE, "-O3  -g", provenance="$CXXFLAGS")}
+    assert _drift(before, after, cfg) == []
+
+
+def test_a_real_value_change_is_still_drift(cfg):
+    from ceteris.model import Field, State
+    from ceteris.runner import _drift
+
+    before = {"build.cxx_flags": Field(State.VALUE, "-O3", provenance="--cxx-flags")}
+    after = {"build.cxx_flags": Field(State.VALUE, "-O0", provenance="--cxx-flags")}
+    changed = _drift(before, after, cfg)
+    assert [d["path"] for d in changed] == ["build.cxx_flags"]
+    assert changed[0]["kind"] == "changed"
+
+
+def test_a_field_that_stopped_being_readable_is_named_as_such(cfg):
+    """Different statement from the environment changing underneath the run."""
+    from ceteris.model import Field, State, unknown
+    from ceteris.runner import _drift
+
+    before = {"source.commit": Field(State.VALUE, "abc")}
+    after = {"source.commit": unknown("git went away")}
+    changed = _drift(before, after, cfg)
+    assert changed[0]["kind"] == "post_capture_unreadable"
+
+
+def test_a_run_says_whether_it_watched_for_drift(cfg):
+    record = run_command([sys.executable, "-c", "pass"], cfg=cfg, echo=False)
+    assert record.run["drift_observed"] is True

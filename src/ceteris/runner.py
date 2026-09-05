@@ -118,19 +118,30 @@ def _drift(before: dict[str, Field], after: dict[str, Field], cfg: Config) -> li
     any two moments; treating that as the environment changing would mark
     every run uncertifiable.
     """
+    from .compare import field_key
+
     changed = []
     for path in sorted(set(before) | set(after)):
         if cfg.severity_of(path) not in GATING_SEVERITIES:
             continue
         old, new = before.get(path), after.get(path)
-        if old is None or new is None or old != new:
-            changed.append(
-                {
-                    "path": path,
-                    "before": _display(old) if old else "<absent>",
-                    "after": _display(new) if new else "<absent>",
-                }
-            )
+        if field_key(path, old, cfg) == field_key(path, new, cfg):
+            continue
+        # A field that was readable before and is not readable now says the
+        # post-run capture is incomplete, which is a different statement from
+        # the environment having changed underneath the run.
+        kind = "changed"
+        if old is not None and old.state is State.VALUE and (
+                new is None or new.state is not State.VALUE):
+            kind = "post_capture_unreadable"
+        changed.append(
+            {
+                "path": path,
+                "kind": kind,
+                "before": _display(old) if old else "<absent>",
+                "after": _display(new) if new else "<absent>",
+            }
+        )
     return changed
 
 
@@ -244,6 +255,8 @@ def run_command(
         # through the same drift evaluator as the environment.
         "drift": _drift({**before.fields, **execution_before},
                         {**after.fields, **execution_after}, cfg),
+        # This run watched for drift on both sides of the command.
+        "drift_observed": True,
     }
 
     metrics: dict[str, Field] = {}

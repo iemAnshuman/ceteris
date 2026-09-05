@@ -45,6 +45,25 @@ class Classification(str, Enum):
 
 ABSENT = "<not applicable>"
 
+# Identity of the equivalence rule itself, so a record can say which one
+# decided that two observations were the same.
+FIELD_EQUIVALENCE = "state-and-canonical-value@1"
+
+
+def field_key(path: str, f, cfg: Config) -> tuple:
+    """What was observed, with the prose about how it was read left out.
+
+    Comparison grouped fields by their canonical value while drift compared
+    whole Field objects, so a provenance string changing between the before
+    and after captures counted as the environment changing. One function
+    now answers the question for both. See design F11.
+    """
+    if f is None:
+        return ("absent",)
+    if f.state is State.VALUE:
+        return ("value", comparators.get(cfg.comparator_of(path))(f.value))
+    return (f.state.value,)
+
 
 def matches(path: str, pattern: str) -> bool:
     """Exact, glob, or prefix match.

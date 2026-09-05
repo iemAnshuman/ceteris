@@ -39,3 +39,22 @@ def test_plugin_is_inert_without_the_flag(pytester, monkeypatch):
     pytester.makepyfile(test_y="def test_a(): pass")
     pytester.runpytest_subprocess("-q", "-p", "no:cacheprovider").assert_outcomes(passed=1)
     assert not store.exists()
+
+
+def test_the_plugin_watches_both_ends_of_the_session(pytester_or_testdir=None):
+    """It captured only at session finish and wrote an empty drift list,
+    which claims the environment held still across a session it never
+    watched. See design F11."""
+    from ceteris import pytest_plugin
+
+    assert hasattr(pytest_plugin, "pytest_sessionstart")
+
+
+def test_a_session_without_a_before_capture_says_drift_was_not_observed():
+    from ceteris.model import Fingerprint
+
+    # The shape the plugin writes when the before-capture failed.
+    run = {"exit_code": 0, "drift": [], "drift_observed": False}
+    record = Fingerprint({}, {"label": "pytest"}, run=run)
+    assert record.drift == []
+    assert record.run["drift_observed"] is False

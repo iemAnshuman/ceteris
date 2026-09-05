@@ -27,7 +27,26 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     if not config.getoption("--ceteris"):
         return
-    config._ceteris = {"started": time.time()}
+    config._ceteris = {"started": time.time(), "before": None}
+
+
+def pytest_sessionstart(session):
+    """Capture before the tests run.
+
+    The plugin used to capture only at session finish and write an empty
+    drift list, which claims the environment held still across a session it
+    never watched. See design F11.
+    """
+    state = getattr(session.config, "_ceteris", None)
+    if state is None:
+        return
+    from .capture import capture
+    from .config import Config
+
+    try:
+        state["before"] = capture(label="pytest", cfg=Config.load())
+    except Exception:  # noqa: BLE001 - a capture failure must not stop the tests
+        state["before"] = None
 
 
 def _benchmark_metrics(config):
@@ -68,9 +87,12 @@ def pytest_sessionfinish(session, exitstatus):
     from .config import Config
     from .model import Fingerprint
 
+    from .runner import _drift
+
     cfg = Config.load()
     fp = capture(label=config.getoption("--ceteris-label") or "pytest", cfg=cfg)
     fields = dict(fp.fields)
+    before = state.get("before")
     fields.update(execution.collect([sys.executable, "-m", "pytest", *config.invocation_params.args]))
     started = state["started"]
     record = Fingerprint(
@@ -82,7 +104,10 @@ def pytest_sessionfinish(session, exitstatus):
             "duration_s": round(time.time() - started, 3),
             "output": "",
             "output_truncated": False,
-            "drift": [],
+            "drift": _drift(before.fields, fp.fields, cfg) if before is not None else [],
+            # Without a before-capture there is nothing to compare against,
+            # and an empty list would claim the environment held still.
+            "drift_observed": before is not None,
         },
         metrics=_benchmark_metrics(config),
     )

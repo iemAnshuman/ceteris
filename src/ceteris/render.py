@@ -190,9 +190,10 @@ def render(report: Report) -> str:
         for fingerprint in report.drifted:
             out.append(f"  {fingerprint.label}")
             for change in fingerprint.drift[:6]:
+                note = " (could not be re-read)" if change.get("kind") == "post_capture_unreadable" else ""
                 out.append(
                     f"      {change['path']}: "
-                    f"{_clip(change['before'], 22)} -> {_clip(change['after'], 22)}"
+                    f"{_clip(change['before'], 22)} -> {_clip(change['after'], 22)}{note}"
                 )
             if len(fingerprint.drift) > 6:
                 out.append(f"      ... and {len(fingerprint.drift) - 6} more")

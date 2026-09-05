@@ -95,7 +95,7 @@ Matched on 135 other fields.
 
 OK: every difference was declared. Comparison is valid.
 
-ceteris-certified v2 configs=2 n=3,3 vary=execution.subject waive= strict=0 signal=1 verdict=ok noise=2% config=02282b8304e8 sha256:5913ed8e93600be80a67276d1e98d7ab0354d80e65ffe701e998ca0ff3365ccf
+ceteris-certified v2 configs=2 n=3,3 vary=execution.subject waive= strict=0 signal=1 verdict=ok noise=2% config=fad3ab4bbac8 sha256:caaf35d6d892d9be716dad4779583913d60cbf152935e0dc86ccff03d38f5c8e
 $ echo $?
 0
 ```
@@ -103,12 +103,15 @@ $ echo $?
 That last line is portable. Paste it into a README, a pull request or a
 paper's artifact appendix, and anyone holding the records can check it. It
 binds every record in full -- every field, every measurement, the exit code --
-so a number nudged after the fact fails the check, and it names the severity
-configuration it was issued under, so a verifier holding a different one is
-told that rather than shown a bare mismatch:
+and every claim it displays, so neither a nudged number nor an edited verdict
+survives the check. It names the policy it was issued under, so a verifier
+holding a different one is told that rather than shown a bare mismatch. And
+it separates two questions that are not the same: whether the line honestly
+describes these records, and whether the comparison passed. `verify` answers
+the first; `verify --require-pass` answers both:
 
 ```console
-$ ceteris verify 'ceteris-certified v2 configs=2 n=3,3 vary=execution.subject waive= strict=0 signal=1 verdict=ok noise=2% config=02282b8304e8 sha256:5913ed8e93600be80a67276d1e98d7ab0354d80e65ffe701e998ca0ff3365ccf' examples/hyperfine/*.json
+$ ceteris verify 'ceteris-certified v2 configs=2 n=3,3 vary=execution.subject waive= strict=0 signal=1 verdict=ok noise=2% config=fad3ab4bbac8 sha256:caaf35d6d892d9be716dad4779583913d60cbf152935e0dc86ccff03d38f5c8e' examples/hyperfine/*.json
 ceteris: verified: ok
 ```
 
@@ -549,10 +552,7 @@ understood the machine does not scale. `ceteris doctor` does it:
 $ ceteris doctor
 this machine: 127 fields (29 captured, 98 not applicable, 0 unknown, 0 error)
 
-WORTH KNOWING (will widen the noise floor):
-  source.dirty  the working tree had uncommitted changes; the commit does not describe the code
-
-Active ecosystem packs: hpc, python
+Nothing to report: every field was either captured or is genuinely absent.
 ```
 
 Three groups, and the middle one is the point:
@@ -599,6 +599,7 @@ and `material` gate, `informational` is shown -- and unlisted fields gate.
 | 2 | something could not be captured, or the environment changed mid-run |
 | 3 | usage |
 | 4 | valid but within noise, or nothing was measured (`--require-signal`) |
+| 5 | the certificate does not describe these records (`verify --require-pass`) |
 | 130 | interrupted; the benchmark was terminated |
 
 ## Configuration

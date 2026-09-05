@@ -633,6 +633,8 @@ harnesses can emit it directly.
 
 ## Status
 
+The [development design](docs/DESIGN.md) defines the proposed comparison protocol, implementation sequence, and release gates.
+
 Beta. Every collector path that matters has run on real hardware, and the
 paths 0.3.0 changed were run again on the cluster before release. CI covers
 Ubuntu and macOS on Python 3.9 through 3.14. Thirteen records captured on

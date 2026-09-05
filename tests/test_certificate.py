@@ -13,7 +13,7 @@ from ceteris.compare import EXIT_INTEGRITY, EXIT_OK, EXIT_UNDECLARED, compare
 from ceteris.config import Config
 from ceteris.model import Field, State, value
 
-from conftest import fp
+from conftest import distinct_meta, fp
 
 
 def two(tmp_path, commit_b="abc"):

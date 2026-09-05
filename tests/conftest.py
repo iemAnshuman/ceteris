@@ -7,12 +7,28 @@ contract the collectors must then satisfy.
 
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 import pytest
 
 from ceteris.config import Config
 from ceteris.model import Field, Fingerprint, State
+
+
+_serial = itertools.count(1)
+
+
+def distinct_meta(label: str) -> dict:
+    """Meta for a record that is its own execution.
+
+    Real records carry the moment they were captured, so two runs are never
+    byte-identical and duplicate detection can tell a genuine repeat from a
+    copied file. Synthetic fixtures have to say the same thing or they look
+    like one observation offered twice.
+    """
+    n = next(_serial)
+    return {"label": label, "captured_at": f"2026-01-01T00:00:{n % 60:02d}+00:00", "fixture_seq": n}
 
 
 def fp(label: str, **fields: Any) -> Fingerprint:
@@ -22,7 +38,7 @@ def fp(label: str, **fields: Any) -> Fingerprint:
     for key, val in fields.items():
         path = key.replace("__", ".")
         built[path] = val if isinstance(val, Field) else Field(State.VALUE, val)
-    return Fingerprint(fields=built, meta={"label": label})
+    return Fingerprint(fields=built, meta=distinct_meta(label))
 
 
 def na(detail: str = "structurally absent") -> Field:

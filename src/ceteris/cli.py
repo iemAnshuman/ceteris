@@ -188,8 +188,26 @@ def _cmd_capture(args) -> int:
     return EXIT_OK
 
 
+def _reject_repeated_paths(paths: list[str]) -> None:
+    """Two names for one file are one observation.
+
+    Resolved, so `a.json`, `./a.json` and a symlink to it are recognised as
+    the same file before anything is loaded.
+    """
+    seen: dict[str, str] = {}
+    for given in paths:
+        key = str(Path(given).resolve())
+        if key in seen:
+            raise ValueError(
+                f"{given!r} and {seen[key]!r} are the same file. One execution "
+                f"cannot contribute twice to a comparison; pass each record once."
+            )
+        seen[key] = given
+
+
 def _select_paths(args) -> list[str]:
     if args.fingerprints:
+        _reject_repeated_paths(list(args.fingerprints))
         return list(args.fingerprints)
     store = store_mod.store_path(args.store)
     paths = store_mod.select(store, last=args.last, labels=args.label)

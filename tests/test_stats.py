@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sys
 
+from pathlib import Path
+
 from ceteris import stats
 from ceteris.cli import main
 from ceteris.compare import EXIT_OK, EXIT_WITHIN_NOISE, compare
@@ -12,9 +14,12 @@ from ceteris.model import Fingerprint, unknown, value
 from ceteris.render import render
 from ceteris.runner import run_repeated
 
+from conftest import distinct_meta
+
 
 def rec(label, commit, bw):
-    return Fingerprint({"source.commit": value(commit)}, {"label": label}, metrics={"bw": value(bw)})
+    return Fingerprint({"source.commit": value(commit)}, distinct_meta(label),
+                       run={"exit_code": 0}, metrics={"bw": value(bw)})
 
 
 def test_identical_environments_group_into_one_configuration():
@@ -34,16 +39,16 @@ def test_the_same_configuration_from_a_different_source_is_one_configuration(cfg
 
     def r(flags, prov):
         return Fingerprint({"build.cxx_flags": Field(State.VALUE, flags, provenance=prov)},
-                           {"label": "x"}, metrics={"bw": value(1.0)}, run={"exit_code": 0})
+                           distinct_meta("x"), metrics={"bw": value(1.0)}, run={"exit_code": 0})
 
-    runs = [r("-O3 -g", "--cxx-flags")] * 3 + [r("-O3  -g", "$CXXFLAGS")] * 3
+    runs = [r("-O3 -g", "--cxx-flags") for _ in range(3)] + [r("-O3  -g", "$CXXFLAGS") for _ in range(3)]
     report = compare(runs, cfg=cfg)
     assert report.results[0].verdict.value == "match"
     assert len(report.configs) == 1 and report.configs[0].n == 6
 
 
 def test_folded_labels_are_all_shown(cfg):
-    runs = [rec("before", "x", 1.0)] * 3 + [rec("after", "x", 1.0)] * 3
+    runs = [rec("before", "x", 1.0) for _ in range(3)] + [rec("after", "x", 1.0) for _ in range(3)]
     assert [g.label for g in stats.group_configs(runs, cfg)] == ["before, after"]
 
 
@@ -92,7 +97,7 @@ def test_gap_above_scatter_is_signal(cfg):
 
 def test_unknown_metrics_are_excluded_from_stats_not_zeroed():
     g = stats.ConfigGroup("h", "a", [rec("a", "x", 10.0),
-                                     Fingerprint({}, {"label": "a"}, metrics={"bw": unknown("no match")})])
+                                     Fingerprint({}, distinct_meta("a"), metrics={"bw": unknown("no match")})])
     assert stats.stats_for(g, "bw").n == 1
 
 
@@ -106,8 +111,8 @@ def test_run_repeated_shares_a_series_and_a_configuration(cfg):
 
 def test_informational_fields_do_not_split_configurations(cfg):
     from ceteris.model import Fingerprint, value
-    a = Fingerprint({"source.commit": value("x"), "system.load_1m": value(1.0)}, {"label": "a"})
-    b = Fingerprint({"source.commit": value("x"), "system.load_1m": value(9.0)}, {"label": "a"})
+    a = Fingerprint({"source.commit": value("x"), "system.load_1m": value(1.0)}, distinct_meta("a"))
+    b = Fingerprint({"source.commit": value("x"), "system.load_1m": value(9.0)}, distinct_meta("a"))
     assert len(stats.group_configs([a, b], cfg)) == 1
     assert a.content_hash() != b.content_hash()  # the artifact hash still sees everything
 
@@ -133,7 +138,7 @@ def test_runs_whose_command_failed_are_never_certified(cfg):
     from ceteris.model import Fingerprint, unknown, value
 
     def crashed(label):
-        return Fingerprint({"source.commit": value("x")}, {"label": label},
+        return Fingerprint({"source.commit": value("x")}, distinct_meta(label),
                            run={"exit_code": 183, "output": "mpirun: launch failed\n"},
                            metrics={"bw": unknown("pattern did not match")})
 
@@ -147,7 +152,7 @@ def test_runs_whose_command_failed_are_never_certified(cfg):
 def test_a_metric_no_run_produced_says_so(cfg):
     from ceteris.model import Fingerprint, unknown, value
 
-    runs = [Fingerprint({"source.commit": value("x")}, {"label": f"r{i}"},
+    runs = [Fingerprint({"source.commit": value("x")}, distinct_meta(f"r{i}"),
                         run={"exit_code": 0}, metrics={"bw": unknown("no match")}) for i in range(3)]
     verdict = compare(runs, cfg=cfg).noise[0]
     assert "no configuration produced a value" in verdict.reason
@@ -159,7 +164,7 @@ def test_a_multi_valued_metric_says_so(cfg):
     from ceteris.metrics import extract
 
     m = extract("bw 10\nbw 12\nbw 11\n", {"bw": r"bw (\d+)"})
-    runs = [Fingerprint({"source.commit": value(c)}, {"label": c}, run={"exit_code": 0}, metrics=dict(m))
+    runs = [Fingerprint({"source.commit": value(c)}, distinct_meta(c), run={"exit_code": 0}, metrics=dict(m))
             for c in ("x", "x", "x", "y", "y", "y")]
     verdict = compare(runs, vary=["source.commit"], cfg=cfg).noise[0]
     assert "multi-valued" in verdict.reason and "3 times" in verdict.reason
@@ -168,7 +173,7 @@ def test_a_multi_valued_metric_says_so(cfg):
 def test_a_successful_run_is_unaffected(cfg):
     from ceteris.model import Fingerprint, value
 
-    runs = [Fingerprint({"source.commit": value("x")}, {"label": f"r{i}"},
+    runs = [Fingerprint({"source.commit": value("x")}, distinct_meta(f"r{i}"),
                         run={"exit_code": 0}, metrics={"bw": value(1.0 + i * 0.01)}) for i in range(3)]
     report = compare(runs, cfg=cfg)
     assert not report.failed_runs and report.exit_code == EXIT_OK
@@ -232,3 +237,56 @@ def test_a_harness_export_of_nan_is_not_recorded_as_a_number():
     assert _num("nan") == "nan"          # kept as evidence of what was exported
     assert _num("inf") == "inf"
     assert _num("12.5") == 12.5
+
+
+# --- F05: one execution contributes at most once ------------------------------
+
+
+def test_the_same_record_three_times_is_refused(cfg):
+    """Two records passed three times each gave three samples per
+    configuration, a zero spread, and a passing signal."""
+    from ceteris.compare import DuplicateObservation
+
+    a, b = rec("a", "x", 1.0), rec("b", "y", 5.0)
+    with pytest.raises(DuplicateObservation, match="more than once"):
+        compare([a, a, a, b, b, b], vary=["source.commit"], cfg=cfg, require_signal=True)
+
+
+def test_a_copied_record_file_is_refused(cfg, tmp_path):
+    """Copying a file does not make a second measurement."""
+    from ceteris.compare import DuplicateObservation
+    from ceteris.store import load, save
+
+    original = save(rec("a", "x", 1.0), tmp_path / "runs")
+    copy = tmp_path / "runs" / "copy.json"
+    copy.write_text(original.read_text())
+    with pytest.raises(DuplicateObservation):
+        compare([load(original), load(copy), rec("b", "y", 5.0)], cfg=cfg)
+
+
+def test_genuine_repeats_with_equal_measurements_are_kept(cfg):
+    """A deterministic benchmark really can produce the same number twice.
+    Distinct executions stay distinct; only identical observations collide."""
+    runs = [rec("a", "x", 1.0) for _ in range(3)] + [rec("b", "y", 5.0) for _ in range(3)]
+    report = compare(runs, vary=["source.commit"], cfg=cfg)
+    assert sorted(g.n for g in report.configs) == [3, 3]
+
+
+@pytest.mark.parametrize("second", ["same", "relative", "symlink"])
+def test_naming_one_file_twice_is_a_usage_error(tmp_path, monkeypatch, second):
+    from ceteris.cli import main
+    from ceteris.compare import EXIT_USAGE
+    from ceteris.store import save
+
+    monkeypatch.chdir(tmp_path)
+    path = save(rec("a", "x", 1.0), tmp_path / "runs")
+    other = save(rec("b", "y", 5.0), tmp_path / "runs")
+    if second == "same":
+        twin = str(path)
+    elif second == "relative":
+        twin = str(Path("runs") / path.name)
+    else:
+        link = tmp_path / "link.json"; link.symlink_to(path); twin = str(link)
+    with pytest.raises(SystemExit) as exc:
+        main(["compare", str(path), twin, str(other)])
+    assert exc.value.code == EXIT_USAGE

@@ -251,6 +251,55 @@ def _analyse_field(
     return verdict, groups, [], note
 
 
+class DuplicateObservation(ValueError):
+    """The same execution offered more than once.
+
+    Copying a record, naming it twice, or passing one object three times
+    used to produce three samples, a zero spread, and a signal. Invariant 5:
+    an execution contributes at most once to a given analysis, and
+    relabelling or copying its file does not create a new execution.
+    """
+
+    code = "duplicate_observation"
+
+
+def observation_digest(fp: Fingerprint) -> str:
+    """Identity of an observation, for duplicate detection only.
+
+    Everything the producer wrote, minus where the file happens to sit. Two
+    genuine repeats differ in `captured_at` and in their measurements; a
+    copy is identical in every byte.
+    """
+    import hashlib
+    import json
+
+    body = fp.to_json()
+    meta = {k: v for k, v in body.get("meta", {}).items() if k != "source_file"}
+    payload = {**body, "meta": meta}
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+    ).hexdigest()
+
+
+def _reject_duplicates(fingerprints: Sequence[Fingerprint]) -> None:
+    seen: dict[str, str] = {}
+    for fp in fingerprints:
+        digest = observation_digest(fp)
+        first = seen.get(digest)
+        if first is not None:
+            where = fp.meta.get("source_file")
+            raise DuplicateObservation(
+                f"the same observation appears more than once ({first!r} and "
+                f"{fp.label!r}"
+                + (f", {where}" if where else "")
+                + "). Copying a record or naming it twice does not make a "
+                "second measurement; record another run instead. If these "
+                "really are separate executions, recapture them so each "
+                "carries its own timestamp."
+            )
+        seen[digest] = fp.label
+
+
 def compare(
     fingerprints: Sequence[Fingerprint],
     vary: Sequence[str] = (),
@@ -261,6 +310,7 @@ def compare(
 ) -> Report:
     if len(fingerprints) < 2:
         raise ValueError("compare needs at least two fingerprints")
+    _reject_duplicates(fingerprints)
     cfg = cfg or Config.load()
     waive = dict(waive or {})
     vary = list(vary)

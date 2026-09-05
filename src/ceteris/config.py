@@ -24,6 +24,23 @@ except ModuleNotFoundError:  # pragma: no cover
 DEFAULTS_PATH = Path(__file__).with_name("defaults.json")
 
 SEVERITIES = ("critical", "material", "informational")
+
+# Identity of the rule-resolution semantics themselves. A digest of the rule
+# text alone says nothing about how ties or precedence were decided, so the
+# engine that read them is part of the policy identity.
+POLICY_ENGINE = "longest-glob@1"
+
+
+class AmbiguousPolicy(ValueError):
+    """Two rules of equal specificity disagree about the same path.
+
+    Which one won depended on dictionary insertion order, so the same policy
+    written in a different order gated differently while hashing the same.
+    A tie is not something to break arbitrarily; it is a policy that has not
+    said what it means.
+    """
+
+    code = "ambiguous_policy_rule"
 DEFAULT_SEVERITY = "material"
 GATING_SEVERITIES = ("critical", "material")
 
@@ -52,6 +69,10 @@ class Config:
     # Packs from config: names to force on. Resolved packs live in active_packs.
     packs: list[str] = field(default_factory=list)
     active_packs: dict[str, Any] = field(default_factory=dict)
+    # Resolution is pure in the rules, and a campaign resolves the same paths
+    # thousands of times.
+    _severity_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    _comparator_cache: dict = field(default_factory=dict, repr=False, compare=False)
 
     @classmethod
     def load(cls, user_path: str | Path | None = None, packs: list[str] | None = None,
@@ -92,6 +113,8 @@ class Config:
             self.merge({"capture": pack.get("capture", {})})
 
     def merge(self, raw: dict[str, Any]) -> None:
+        self._severity_cache.clear()
+        self._comparator_cache.clear()
         capture = raw.get("capture", {})
         for name in ("env_allowlist", "cmake_keys"):
             extra = capture.get(name)
@@ -114,21 +137,49 @@ class Config:
                     f"expected one of {', '.join(SEVERITIES)}"
                 )
 
+    @staticmethod
+    def _specificity(pattern: str) -> int:
+        return len(pattern) - pattern.count("*") * 2
+
+    def _resolve(self, rules: dict, path: str, default: str, kind: str) -> str:
+        """Most specific matching glob wins; an unbroken tie is an error.
+
+        'hardware.hostname' beats 'hardware.*'. Two patterns of equal
+        specificity that disagree are refused rather than settled by
+        whichever happened to be written first.
+        """
+        best_score = None
+        winners: dict[str, str] = {}          # value -> the pattern that gave it
+        for pattern, val in rules.items():
+            if not fnmatch.fnmatchcase(path, pattern):
+                continue
+            score = self._specificity(pattern)
+            if best_score is None or score > best_score:
+                best_score, winners = score, {val: pattern}
+            elif score == best_score:
+                winners.setdefault(val, pattern)
+        if not winners:
+            return default
+        if len(winners) > 1:
+            shown = ", ".join(f"{pat!r} says {val}" for val, pat in sorted(winners.items()))
+            raise AmbiguousPolicy(
+                f"{kind} for {path!r} is ambiguous: {shown}. Both patterns are "
+                f"equally specific, so which one applies would depend on the order "
+                f"they were written in. Make one more specific, or give the exact "
+                f"path its own rule."
+            )
+        return next(iter(winners))
+
     def severity_of(self, path: str) -> str:
-        """Longest matching glob wins, so 'hardware.hostname' beats 'hardware.*'."""
-        best: tuple[int, str] | None = None
-        for pattern, sev in self.severity.items():
-            if fnmatch.fnmatchcase(path, pattern):
-                score = len(pattern) - pattern.count("*") * 2
-                if best is None or score > best[0]:
-                    best = (score, sev)
-        return best[1] if best else DEFAULT_SEVERITY
+        cached = self._severity_cache.get(path)
+        if cached is None:
+            cached = self._resolve(self.severity, path, DEFAULT_SEVERITY, "severity")
+            self._severity_cache[path] = cached
+        return cached
 
     def comparator_of(self, path: str) -> str:
-        best: tuple[int, str] | None = None
-        for pattern, name in self.comparators.items():
-            if fnmatch.fnmatchcase(path, pattern):
-                score = len(pattern) - pattern.count("*") * 2
-                if best is None or score > best[0]:
-                    best = (score, name)
-        return best[1] if best else "scalar"
+        cached = self._comparator_cache.get(path)
+        if cached is None:
+            cached = self._resolve(self.comparators, path, "scalar", "comparator")
+            self._comparator_cache[path] = cached
+        return cached

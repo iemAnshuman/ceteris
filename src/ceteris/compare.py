@@ -414,7 +414,10 @@ def _config_digest(cfg: Config) -> str:
     import hashlib
     import json
 
+    from .config import POLICY_ENGINE
+
     payload = {
+        "engine": POLICY_ENGINE,
         "severity": sorted(cfg.severity.items()),
         "comparators": sorted(cfg.comparators.items()),
     }

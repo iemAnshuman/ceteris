@@ -123,3 +123,78 @@ def test_shipped_defaults_need_no_toml_parser():
     assert cfg_mod.DEFAULTS_PATH.suffix == ".json"
     from ceteris import packs
     assert packs.available() and all(p.suffix == ".json" for p in packs.PACK_DIR.glob("*.json"))
+
+
+# --- F08: a policy that has not said what it means ----------------------------
+
+TIED = [("runtime.env.*_SIZE", "critical"), ("runtime.*.LCI_SIZE", "informational")]
+
+
+def test_equally_specific_rules_that_disagree_are_refused():
+    """Which one won depended on the order they were written in, while the
+    policy digest, which sorts, stayed identical. A field gated under one
+    ordering and not the other, and nothing could tell."""
+    from ceteris.config import AmbiguousPolicy
+
+    cfg = Config.load()
+    cfg.severity = dict(TIED)
+    cfg._severity_cache.clear()
+    with pytest.raises(AmbiguousPolicy) as exc:
+        cfg.severity_of("runtime.env.LCI_SIZE")
+    assert "runtime.env.*_SIZE" in str(exc.value) and "runtime.*.LCI_SIZE" in str(exc.value)
+
+
+def test_permuting_the_source_order_never_changes_a_valid_policy():
+    import itertools
+
+    rules = {"hardware.*": "material", "hardware.gpu_models": "critical",
+             "system.*": "material", "system.load_1m": "informational"}
+    paths = ["hardware.gpu_models", "hardware.cpu_model", "system.load_1m", "system.turbo"]
+    answers = set()
+    for order in itertools.permutations(rules.items()):
+        cfg = Config.load()
+        cfg.severity = dict(order)
+        cfg._severity_cache.clear()
+        answers.add(tuple(cfg.severity_of(p) for p in paths))
+    assert len(answers) == 1
+
+
+def test_equally_specific_rules_that_agree_are_fine():
+    cfg = Config.load()
+    cfg.severity = {"runtime.env.*_SIZE": "critical", "runtime.*.LCI_SIZE": "critical"}
+    cfg._severity_cache.clear()
+    assert cfg.severity_of("runtime.env.LCI_SIZE") == "critical"
+
+
+def test_a_comparator_tie_is_treated_the_same_as_a_severity_tie():
+    from ceteris.config import AmbiguousPolicy
+
+    cfg = Config.load()
+    cfg.comparators = {"build.cxx_*": "tokens", "*.cxx_flags": "scalar"}
+    cfg._comparator_cache.clear()
+    with pytest.raises(AmbiguousPolicy):
+        cfg.comparator_of("build.cxx_flags")
+
+
+def test_the_shipped_defaults_resolve_every_captured_path_unambiguously():
+    from ceteris.capture import capture
+
+    cfg = Config.load()
+    for path in sorted(capture(cfg=cfg, label="tie-check").fields):
+        cfg.severity_of(path)
+        cfg.comparator_of(path)
+
+
+def test_the_policy_identity_names_the_engine_that_read_it():
+    """A digest of the rule text says nothing about how ties were decided."""
+    import json
+
+    from ceteris.compare import _config_digest
+    from ceteris.config import POLICY_ENGINE
+
+    cfg = Config.load()
+    before = _config_digest(cfg)
+    assert POLICY_ENGINE in json.dumps({"engine": POLICY_ENGINE})
+    cfg.severity["a.brand.new.path"] = "critical"
+    cfg._severity_cache.clear()
+    assert _config_digest(cfg) != before

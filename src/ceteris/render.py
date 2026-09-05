@@ -175,7 +175,11 @@ def render(report: Report) -> str:
     if report.failed_runs:
         out.append("THE BENCHMARK FAILED (nothing here can be certified):")
         for f in report.failed_runs:
-            out.append(f"  {f.label:<20} exit {f.run.get('exit_code')}")
+            claim = f.run.get("harness") or {}
+            if claim.get("validity") == "invalid":
+                out.append(f"  {f.label:<20} {claim.get('detail', 'the harness reported an invalid run')}")
+            else:
+                out.append(f"  {f.label:<20} exit {f.run.get('exit_code')}")
             tail = [ln for ln in str(f.run.get("output", "")).splitlines() if ln.strip()][-2:]
             for line in tail:
                 out.append(f"      {_clip(line, 70)}")

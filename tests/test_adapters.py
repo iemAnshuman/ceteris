@@ -74,7 +74,11 @@ def test_mlperf_reconstructed_fixture(tmp_path):
     shutil.copy(FX / "mlperf_log_summary.txt", tmp_path / "mlperf_log_summary.txt")
     out = adapters.MLPerf().collect(adapters.Plan("mlperf", []), "", str(tmp_path), 0)
     assert out["mlperf.samples_per_second"].value == 1234.56
-    assert out["mlperf.result"].value == "VALID"
+    # The harness's own verdict is evidence about the run, not a measurement
+    # of it, so it is no longer smuggled in as a string-valued metric.
+    assert "mlperf.result" not in out
+    state, detail = adapters.MLPerf().validity(adapters.Plan("mlperf", []), "", str(tmp_path), 0)
+    assert state == "valid" and "VALID" in detail
 
 
 def test_google_benchmark_repetitions_are_folded_not_overwritten(tmp_path):
@@ -171,3 +175,51 @@ def test_a_zero_config_harness_run_in_a_clean_repo_does_not_drift(cfg, tmp_path,
     assert rec.fields["execution.subject"].value == ["true"]
     assert rec.fields["execution.program_args"].value == ["-N"]
     assert len(rec.fields["execution.subject_sha256"].value["true"]) == 64
+
+
+# --- F06: a harness that says the run was not valid ---------------------------
+
+
+def test_mlperf_invalid_is_a_failed_run_even_at_exit_zero(tmp_path, cfg):
+    """`Result is : INVALID` used to arrive as a string metric, which no
+    statistic looked at, so the comparison passed."""
+    from ceteris.compare import compare, harness_validity
+    from ceteris.model import Fingerprint, value
+
+    text = (FX / "mlperf_log_summary.txt").read_text().replace("Result is : VALID", "Result is : INVALID")
+    (tmp_path / "mlperf_log_summary.txt").write_text(text)
+    plan = adapters.Plan("mlperf", [])
+    state, detail = adapters.MLPerf().validity(plan, "", str(tmp_path), 0)
+    assert state == "invalid" and "INVALID" in detail
+
+    def run(label):
+        return Fingerprint({"source.commit": value("x")}, {"label": label, "captured_at": f"t{label}"},
+                           run={"exit_code": 0, "harness": {"adapter": "mlperf", "validity": state,
+                                                            "detail": detail}},
+                           metrics={"mlperf.samples_per_second": value(1234.56)})
+
+    report = compare([run("a"), run("b")], cfg=cfg)
+    assert harness_validity(run("a")) == "invalid"
+    assert [f.label for f in report.failed_runs] == ["a", "b"]
+    assert report.exit_code != 0
+
+
+def test_google_benchmark_error_entries_are_a_failed_run(tmp_path):
+    out = tmp_path / "gb.json"
+    out.write_text(json.dumps({"benchmarks": [
+        {"name": "BM_ok", "run_type": "iteration", "real_time": 10.0, "time_unit": "ns"},
+        {"name": "BM_broken", "run_type": "iteration", "error_occurred": True,
+         "error_message": "out of memory", "real_time": 0.0, "time_unit": "ns"},
+    ]}))
+    plan = adapters.Plan("gbench", [], str(out))
+    got = adapters.GoogleBenchmark().collect(plan, "", str(tmp_path), 0)
+    assert "gbench.BM_broken.real_time_ns" not in got     # not a measurement
+    state, detail = adapters.GoogleBenchmark().validity(plan, "", str(tmp_path), 0)
+    assert state == "invalid" and "BM_broken" in detail
+
+
+def test_a_harness_making_no_claim_is_unverified_not_validated():
+    """Absence of a correctness claim is not a clean bill of health, and it
+    does not block on its own either."""
+    state, _ = adapters.Hyperfine().validity(adapters.Plan("hyperfine", []), "", ".", 0)
+    assert state == "unverified"

@@ -94,6 +94,16 @@ class Adapter:
     def collect(self, plan: Plan, stdout: str, cwd: str, started: float) -> dict[str, Field]:  # pragma: no cover
         return {}
 
+    def validity(self, plan: "Plan", stdout: str, cwd: str, started: float) -> tuple:
+        """(state, detail) where state is valid, invalid or unverified.
+
+        A harness that says its own run was not valid has said the run
+        failed, whatever the process exit status was. Absence of a claim is
+        `unverified`; it is not a clean bill of health, and it does not
+        block on its own.
+        """
+        return ("unverified", f"{self.name} reports no validity claim")
+
     def subject(self, argv: list[str]) -> list[str] | None:
         """The command strings the harness itself times, when the harness is
         a wrapper around them (hyperfine); None when the program on the
@@ -206,7 +216,7 @@ class GoogleBenchmark(Adapter):
         # so only the last repetition survived. Take the median across them.
         runs: dict[str, list] = {}
         for b in data.get("benchmarks", []):
-            if b.get("run_type") == "aggregate":
+            if b.get("run_type") == "aggregate" or b.get("error_occurred"):
                 continue
             unit = b.get("time_unit", "ns")
             runs.setdefault(f"gbench.{b.get('name', '?')}.real_time_{unit}", []).append(_num(b.get("real_time")))
@@ -218,6 +228,23 @@ class GoogleBenchmark(Adapter):
             else:
                 out[key] = value(xs[0], provenance="--benchmark_out json")
         return out or self._failed("no benchmarks in output")
+
+
+class _GoogleBenchmarkValidity:
+    """Mixin split out only to keep the class body readable."""
+
+    def validity(self, plan, stdout, cwd, started):
+        data, err = self._read_json(plan.output)
+        if err:
+            return ("unverified", err)
+        failed = [b.get("name", "?") for b in data.get("benchmarks", []) if b.get("error_occurred")]
+        if failed:
+            return ("invalid",
+                    "Google Benchmark reported an error for " + ", ".join(failed[:3]))
+        return ("valid", "no benchmark reported an error")
+
+
+GoogleBenchmark.validity = _GoogleBenchmarkValidity.validity
 
 
 class PytestBenchmark(Adapter):
@@ -351,10 +378,28 @@ class MLPerf(Adapter):
             m = re.search(rf"{label}\s*:\s*([0-9.]+)", text)
             if m:
                 out[f"mlperf.{key}"] = value(float(m.group(1)), provenance=path)
-        m = re.search(r"Result is\s*:\s*(\w+)", text)
-        if m:
-            out["mlperf.result"] = value(m.group(1), provenance=path)
         return out or self._failed(f"no recognised fields in {path}")
+
+    def _summary_path(self, cwd: str, started: float) -> str | None:
+        fresh = [p for p in glob.glob(os.path.join(cwd, "**", "mlperf_log_summary.txt"), recursive=True)
+                 if os.path.getmtime(p) >= started - 1]
+        return max(fresh, key=os.path.getmtime) if fresh else None
+
+    def validity(self, plan, stdout, cwd, started):
+        path = self._summary_path(cwd, started)
+        if path is None:
+            return ("unverified", "no fresh mlperf_log_summary.txt to read a result from")
+        try:
+            text = open(path, encoding="utf-8").read()
+        except OSError as exc:
+            return ("unverified", str(exc))
+        m = re.search(r"Result is\s*:\s*(\w+)", text)
+        if not m:
+            return ("unverified", f"no 'Result is' line in {path}")
+        claim = m.group(1).upper()
+        if claim == "VALID":
+            return ("valid", f"loadgen reported VALID in {path}")
+        return ("invalid", f"loadgen reported {claim} in {path}; the run is not a result")
 
 
 ADAPTERS: list[Adapter] = [Hyperfine(), GoogleBenchmark(), PytestBenchmark(), JMH(), Criterion(), OSU(), NCCLTests(), MLPerf()]

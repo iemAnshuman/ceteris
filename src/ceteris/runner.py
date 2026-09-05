@@ -178,6 +178,8 @@ def run_command(
 
     metrics: dict[str, Field] = {}
     if chosen:
+        state, detail = chosen.validity(plan, output, os.getcwd(), wall_started)
+        record["harness"] = {"adapter": chosen.name, "validity": state, "detail": detail}
         try:
             metrics.update(chosen.collect(plan, output, os.getcwd(), wall_started))
         finally:

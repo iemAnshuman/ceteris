@@ -185,6 +185,10 @@ class Report:
             code = f.run.get("exit_code")
             if isinstance(code, int) and code != 0:
                 out.append(f)
+            elif harness_validity(f) == "invalid":
+                # Exit zero is not proof of a correct answer. A harness that
+                # declares its own run invalid has failed regardless.
+                out.append(f)
         return out
 
     @property
@@ -192,6 +196,13 @@ class Report:
         """Runs whose environment changed while they were running. Such a run
         has no single well-defined identity, so it cannot be certified."""
         return [f for f in self.sources if f.drift]
+
+
+def harness_validity(fp: Fingerprint) -> str:
+    """valid, invalid or unverified, as the harness itself reported."""
+    claim = fp.run.get("harness") or {}
+    state = claim.get("validity")
+    return state if state in ("valid", "invalid", "unverified") else "unverified"
 
 
 def _render_value(value: Any) -> str:

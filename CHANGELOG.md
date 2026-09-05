@@ -67,6 +67,16 @@ could report a false success.
   end and wrote an empty drift list; it now observes both ends, or says it
   could not.
 
+### The protocol foundation (WP03), not yet written by any command
+
+`ceteris.protocol` arrives alongside the shipped format rather than
+replacing it. It carries the canonical encoding `ceteris-json-v1` with byte
+vectors frozen in `tests/fixtures/protocol/encoding_vectors.json`, exact
+decimals and rationals, the schema 4 typed values for fields, capabilities
+and metric observations, and a strict validator that reports structured
+issues with stable codes instead of raising. Nothing reads or writes schema
+4 yet; `ceteris run` still produces schema 3.
+
 ### Migration
 
 Certificates issued before this release report a configuration mismatch,

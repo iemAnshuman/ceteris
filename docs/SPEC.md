@@ -160,6 +160,75 @@ nothing left unencoded, so any reason round-trips exactly.
 Version 1 lines hashed only the gating fields and one boolean per metric;
 they are refused by `verify` rather than checked.
 
+## Schema 4 (in progress)
+
+Schema 3 above is the shipped format. Schema 4 is being built alongside it
+under `ceteris.protocol`, and is not yet written by any command. It is
+described in full in [the design](DESIGN.md) sections 5.1 to 5.7. What
+exists today:
+
+### Canonical encoding, `ceteris-json-v1`
+
+A digest means nothing unless two implementations agree on the bytes it
+covers, so the encoding is small and pinned:
+
+- UTF-8 without a BOM. Duplicate object keys and unpaired surrogates are
+  refused, not resolved.
+- null, booleans, strings, arrays, objects, and integers within
+  ±9007199254740991. No fractional JSON numbers: a decimal measurement is a
+  string, so `0.1` survives every language's parser unchanged.
+- Object keys sort by Unicode scalar value; array order is significant.
+- Compact, with no trailing newline in the hashed bytes.
+- `"` and `\` escaped; `\b \t \n \f \r` for those five; everything else
+  below U+0020, plus U+007F and all non-ASCII, as lowercase `\uXXXX`, with
+  surrogate pairs above the BMP. `/` is not escaped, and no normalization is
+  applied.
+- Pretty-printed input canonicalizes to the same digest. An object never
+  contains its own digest.
+
+Digests are `sha256:` followed by 64 lowercase hex characters. Byte vectors
+are frozen in `tests/fixtures/protocol/encoding_vectors.json`; an
+independent implementation must reproduce them exactly.
+
+### Decimals and rationals
+
+Canonical decimals carry no exponent, no leading plus, no unnecessary
+leading zeros, no trailing fractional zeros and no negative zero. At most
+128 significant digits, absolute exponent at most 308, expanded form at most
+1024 characters; beyond that the value is refused as `numeric_limit_exceeded`
+rather than rounded. A binary float cannot become a decimal measurement,
+because the precision is already gone. Computed effects are exact rationals,
+reduced, with a positive denominator.
+
+### Typed values
+
+Fields keep the four states. `value` carries `v` and the others must not.
+`not_applicable` needs a real applicability reason, and "not implemented" is
+not one. Provenance is structured as collector id, collector version, source
+kind and source ref, so a wording change is not mistaken for a change in the
+world.
+
+Observations are scoped: `controller`, `subject`, `node/<id>`, `execution`,
+`campaign`, or `validator/<id>`. Capability evidence records whether a
+required observation was `observed`, `not_applicable`, `unavailable`,
+`unsupported` or `excluded`; only the first two answer a requirement.
+
+A metric carries case, metric id, unit, direction and domain alongside its
+estimate. Units come from a registry (`s`, `ns`, `us`, `ms`, `B`, `B/s`,
+`count`, `count/s`, `ratio`); time converts by exact powers of ten and
+anything else is refused rather than guessed. A metric whose direction is
+`none` can be displayed but cannot decide whether a change was an
+improvement.
+
+### Limits
+
+16 MiB per file, nesting depth 64, 100,000 field entries, 10,000 metric
+entries, 1,000,000 raw samples, 1,000,000 characters per string. Each is
+refused with the limit named. Malformed structure produces a structured
+issue with a stable code, never a traceback: `invalid_uuid`,
+`malformed_exit_code`, `duplicate_metric_identity`, `invalid_scope`,
+`missing_applicability_reason`, `limit_exceeded` and their kin.
+
 ## Compatibility
 
 Consumers must accept unknown keys everywhere. Producers must not remove or

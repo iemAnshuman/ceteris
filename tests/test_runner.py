@@ -142,14 +142,16 @@ def test_a_tool_banner_outside_utf8_is_still_read():
     assert res.ok and "1.2.3" in res.stdout
 
 
-def test_ctrl_c_terminates_the_benchmark(cfg, monkeypatch):
-    """A wrapper that dies on Ctrl-C and leaves a 16-node job running is
-    worse than no wrapper."""
+def test_ctrl_c_terminates_the_whole_process_group(cfg, monkeypatch):
+    """A wrapper that dies on Ctrl-C and leaves a job running is worse than
+    no wrapper, and signalling only the immediate process leaves whatever a
+    launcher started behind. See design F10."""
     import ceteris.runner as runner_mod
 
     events = []
 
     class FakeProc:
+        pid = 4321
         def __init__(self, *a, **k):
             self.stdout = self
         def __iter__(self):
@@ -164,9 +166,65 @@ def test_ctrl_c_terminates_the_benchmark(cfg, monkeypatch):
             events.append("kill")
 
     monkeypatch.setattr(runner_mod.subprocess, "Popen", FakeProc)
+    monkeypatch.setattr(runner_mod.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(runner_mod.os, "killpg", lambda pgid, sig: events.append(f"killpg {pgid} {sig}"))
     with pytest.raises(KeyboardInterrupt):
         run_command([sys.executable, "-c", "pass"], cfg=cfg, echo=False)
-    assert events == ["reading", "terminate", "wait"]
+    assert events[0] == "reading"
+    assert f"killpg 4321 {int(runner_mod.signal.SIGTERM)}" in events
+    assert "wait" in events
+
+
+def test_an_unkillable_child_is_killed_after_the_grace_period(cfg, monkeypatch):
+    import ceteris.runner as runner_mod
+
+    events = []
+
+    class Stubborn:
+        pid = 99
+        def __init__(self, *a, **k):
+            self.stdout = self
+        def __iter__(self):
+            raise KeyboardInterrupt
+        def wait(self, timeout=None):
+            if timeout is not None:
+                raise runner_mod.subprocess.TimeoutExpired("cmd", timeout)
+            events.append("reaped")
+            return -9
+        def terminate(self): pass
+        def kill(self): events.append("kill")
+
+    monkeypatch.setattr(runner_mod.subprocess, "Popen", Stubborn)
+    monkeypatch.setattr(runner_mod.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(runner_mod.os, "killpg", lambda pgid, sig: events.append(f"sig {int(sig)}"))
+    with pytest.raises(KeyboardInterrupt):
+        run_command([sys.executable, "-c", "pass"], cfg=cfg, echo=False)
+    assert events == [f"sig {int(runner_mod.signal.SIGTERM)}",
+                      f"sig {int(runner_mod.signal.SIGKILL)}", "reaped"]
+
+
+def test_a_noisy_benchmark_does_not_accumulate_all_of_its_output(cfg):
+    """Only the last 64 KiB was ever saved, but every line was held in memory
+    to get there."""
+    from ceteris.runner import MAX_OUTPUT
+
+    record = run_command(
+        [sys.executable, "-c",
+         "print('x' * 200 + '\\n', end='') if False else [print('y' * 200) for _ in range(3000)]"],
+        cfg=cfg, echo=False,
+    )
+    assert len(record.run["output"]) <= MAX_OUTPUT
+    assert record.run["output_truncated"] is True
+    assert record.run["output_bytes_total"] > MAX_OUTPUT
+    assert record.run["output_bytes_dropped"] > 0
+    # the tail is kept, not the head
+    assert record.run["output"].rstrip().endswith("y" * 200)
+
+
+def test_short_output_is_not_reported_as_truncated(cfg):
+    record = run_command([sys.executable, "-c", "print('small')"], cfg=cfg, echo=False)
+    assert record.run["output_truncated"] is False
+    assert record.run["output_bytes_dropped"] == 0
 
 
 # --- F03: the subject is identified before it runs ----------------------------

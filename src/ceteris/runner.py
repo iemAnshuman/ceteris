@@ -23,9 +23,11 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import signal
 import subprocess
 import sys
 import time
+from collections import deque
 from typing import Any
 
 from . import adapters, execution
@@ -35,6 +37,72 @@ from .metrics import extract
 from .model import Field, Fingerprint, State, value
 
 MAX_OUTPUT = 64 * 1024
+TERMINATE_GRACE_S = 5.0
+
+_POSIX = os.name == "posix"
+
+
+class _Spool:
+    """A bounded tail of the benchmark's output.
+
+    Every line used to be kept in a list and only the last 64 KiB survived
+    into the record, so a benchmark printing per-iteration lines for an hour
+    was held in memory in full for the sake of its final page. This keeps the
+    same tail and counts what it dropped.
+    """
+
+    def __init__(self, limit: int = MAX_OUTPUT):
+        self.limit = limit
+        self._lines: "deque[str]" = deque()
+        self._size = 0
+        self.total = 0
+        self.dropped = 0
+
+    def add(self, line: str) -> None:
+        self._lines.append(line)
+        self._size += len(line)
+        self.total += len(line)
+        while self._size > self.limit and len(self._lines) > 1:
+            gone = self._lines.popleft()
+            self._size -= len(gone)
+            self.dropped += len(gone)
+
+    def text(self) -> str:
+        return "".join(self._lines)[-self.limit:]
+
+    @property
+    def truncated(self) -> bool:
+        return self.dropped > 0 or self.total > self.limit
+
+
+def _terminate(proc) -> None:
+    """Stop the benchmark and the children it started, with a bound.
+
+    Signalling only the immediate process leaves a launcher's local children
+    running. The group is signalled where the platform has groups. Ranks a
+    launcher started on *other* nodes are its business, not ours, and this
+    makes no claim about them.
+    """
+    try:
+        if _POSIX:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        else:                                        # pragma: no cover
+            proc.terminate()
+    except (ProcessLookupError, PermissionError, OSError):
+        proc.terminate()
+    try:
+        proc.wait(timeout=TERMINATE_GRACE_S)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        if _POSIX:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        else:                                        # pragma: no cover
+            proc.kill()
+    except (ProcessLookupError, PermissionError, OSError):
+        proc.kill()
+    proc.wait()
 
 
 def _display(field: Field) -> str:
@@ -115,7 +183,7 @@ def run_command(
     started = _dt.datetime.now(_dt.timezone.utc)
     wall_started = time.time()
     clock = time.monotonic()
-    chunks: list[str] = []
+    spool = _Spool()
     try:
         proc = subprocess.Popen(
             plan.argv,
@@ -126,6 +194,9 @@ def run_command(
             # its record; the tail of its output is evidence, not data.
             errors="replace",
             bufsize=1,
+            # Its own process group, so termination can reach the children a
+            # launcher starts rather than only the launcher.
+            start_new_session=_POSIX,
         )
     except (OSError, ValueError) as exc:
         raise ValueError(f"could not launch {command[0]!r}: {exc}") from exc
@@ -133,19 +204,15 @@ def run_command(
     assert proc.stdout is not None
     try:
         for line in proc.stdout:
-            chunks.append(line)
+            spool.add(line)
             if echo:
                 sys.stdout.write(line)
                 sys.stdout.flush()
         exit_code = proc.wait()
     except KeyboardInterrupt:
-        # Do not leave the benchmark running behind a dead wrapper.
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
+        # Do not leave the benchmark, or anything it started, running behind
+        # a dead wrapper.
+        _terminate(proc)
         raise
     duration = time.monotonic() - clock
     # A process killed by a signal has a negative return code here. Reported
@@ -155,21 +222,24 @@ def run_command(
     if signal_number:
         exit_code = 128 + signal_number
 
-    output = "".join(chunks)
+    output = spool.text()
     after = capture(label=label, **kwargs)
     execution_after = execution.collect(command, subjects=subjects)
 
     fields = dict(before.fields)
     fields.update(execution_before)
 
-    truncated = len(output) > MAX_OUTPUT
     record: dict[str, Any] = {
         "exit_code": exit_code,
         **({"signal": signal_number} if signal_number else {}),
         "started_at": started.isoformat(timespec="seconds"),
         "duration_s": round(duration, 3),
-        "output": output[-MAX_OUTPUT:],
-        "output_truncated": truncated,
+        "output": output,
+        "output_truncated": spool.truncated,
+        # What was dropped is itself evidence: a reader must know the tail is
+        # not the whole story.
+        "output_bytes_total": spool.total,
+        "output_bytes_dropped": spool.dropped,
         # The subject's identity is evidence like any other, so it goes
         # through the same drift evaluator as the environment.
         "drift": _drift({**before.fields, **execution_before},

@@ -269,7 +269,7 @@ def _cmd_verify(args) -> int:
 
 
 def _cmd_run(args) -> int:
-    from .runner import run_repeated
+    from .runner import run_records
 
     command = list(args.command)
     if command and command[0] == "--":
@@ -280,7 +280,7 @@ def _cmd_run(args) -> int:
             "e.g. ceteris run --label a -- mpirun -n 2 ./bench"
         )
     cfg = Config.load(args.config, packs=args.pack, tree=args.repo)
-    records = run_repeated(
+    records = run_records(
         command,
         args.repeats,
         label=args.label,
@@ -296,19 +296,24 @@ def _cmd_run(args) -> int:
         ingest=args.ingest,
     )
     worst = 0
-    outputs = _output_paths(args.output, len(records))
+    outputs = _output_paths(args.output, args.repeats)
+    completed: list = []
+    # Each record is written before the next run starts, so an interruption
+    # costs at most the run it interrupted.
     for record, out_path in zip(records, outputs):
         if out_path:
             Path(out_path).write_text(record.dumps(), encoding="utf-8")
         if not args.no_store:
             path = store_mod.save(record, store_mod.store_path(args.store))
             sys.stderr.write(f"ceteris: recorded {path}\n")
+        completed.append(record)
         if record.drift:
             sys.stderr.write(
                 f"ceteris: WARNING -- the environment changed during this run "
                 f"({len(record.drift)} field(s)); this run is not certifiable\n"
             )
         worst = max(worst, int(record.run.get("exit_code", 0)))
+    records = completed
     if not any(r.metrics for r in records):
         # The environment is recorded either way, but a first-time user who
         # printed a number and got no measurement should be told why.

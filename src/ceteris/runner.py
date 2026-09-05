@@ -204,8 +204,14 @@ def run_command(
     return Fingerprint(fields=fields, meta=meta, run=record, metrics=metrics)
 
 
-def run_repeated(command: list[str], repeats: int, label: str | None = None, **kwargs) -> list[Fingerprint]:
-    """Run the command `repeats` times; one record each, sharing a series id.
+def run_records(command: list[str], repeats: int, label: str | None = None, **kwargs):
+    """Yield each record the moment its run is complete.
+
+    A measurement that finished is evidence, and it should survive whatever
+    happens to the next one. Building the whole list before returning meant
+    that interrupting repeat two threw away repeat one, which had already
+    run: the machine had been occupied, the numbers existed, and they were
+    discarded on the way out. See design F09.
 
     Records that capture an identical environment share a content hash, and
     compare groups by that hash, so repeats need no other bookkeeping. Each
@@ -214,12 +220,16 @@ def run_repeated(command: list[str], repeats: int, label: str | None = None, **k
     """
     if repeats < 1:
         raise ValueError("repeats must be at least 1")
-    out: list[Fingerprint] = []
     series = None
     for i in range(1, repeats + 1):
         record = run_command(command, label=label, series=series, repeat=i, **kwargs)
         if series is None:
             series = f"{record.label}@{record.run['started_at']}"
             record.meta["series"] = series
-        out.append(record)
-    return out
+        yield record
+
+
+def run_repeated(command: list[str], repeats: int, label: str | None = None, **kwargs) -> list[Fingerprint]:
+    """The whole campaign as a list. Callers that must not lose a completed
+    run on interruption should consume `run_records` instead."""
+    return list(run_records(command, repeats, label=label, **kwargs))

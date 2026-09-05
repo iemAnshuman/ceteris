@@ -62,7 +62,11 @@ def save(fingerprint: Fingerprint, store: Path) -> Path:
     while path.exists():
         n += 1
         path = store / f"{stamp}-{_slug(fingerprint.label)}-{n}.json"
-    path.write_text(fingerprint.dumps(), encoding="utf-8")
+    # Written whole or not at all: a crash between two repeats must not leave
+    # a half-serialised record that later reads as a corrupt observation.
+    tmp = path.with_name(path.name + ".partial")
+    tmp.write_text(fingerprint.dumps(), encoding="utf-8")
+    os.replace(tmp, path)
     return path
 
 

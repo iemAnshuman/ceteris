@@ -230,3 +230,69 @@ def test_a_file_changing_while_it_is_hashed_is_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(execution.os, "stat", shifting_stat)
     with pytest.raises(execution.FileChangedWhileReading):
         execution._sha256(str(target))
+
+
+# --- F09: a completed run survives the next one --------------------------------
+
+
+def test_interrupting_a_later_repeat_keeps_the_earlier_records(tmp_path, monkeypatch, cfg):
+    """Repeat one had already run: the machine was occupied and the numbers
+    existed. Building the whole list before returning threw them away."""
+    import ceteris.runner as runner_mod
+    from ceteris.cli import main
+    from ceteris import store as store_mod
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CETERIS_STORE", str(tmp_path / "runs"))
+    real = runner_mod.run_command
+    calls = {"n": 0}
+
+    def interrupt_on_third(*a, **kw):
+        calls["n"] += 1
+        if calls["n"] == 3:
+            raise KeyboardInterrupt
+        return real(*a, **kw)
+
+    monkeypatch.setattr(runner_mod, "run_command", interrupt_on_third)
+    with pytest.raises(SystemExit) as exc:
+        main(["run", "--label", "rep", "-q", "--repeats", "5", "--",
+              sys.executable, "-c", "print('bw 5')"])
+    assert exc.value.code == 130
+    saved = store_mod.all_runs(tmp_path / "runs")
+    assert len(saved) == 2, "the two completed runs must still be on disk"
+    for path in saved:
+        assert store_mod.load(path).run["exit_code"] == 0
+
+
+def test_run_records_yields_before_the_next_run_starts(cfg):
+    """The property the CLI relies on, stated directly."""
+    from ceteris.runner import run_records
+
+    seen = []
+    for record in run_records([sys.executable, "-c", "pass"], 3, cfg=cfg, echo=False, label="x"):
+        seen.append(record.meta["repeat"])
+    assert seen == [1, 2, 3]
+
+
+def test_run_repeated_still_returns_a_list(cfg):
+    from ceteris.runner import run_repeated
+
+    records = run_repeated([sys.executable, "-c", "pass"], 2, cfg=cfg, echo=False, label="x")
+    assert isinstance(records, list) and len(records) == 2
+
+
+def test_a_record_is_written_whole_or_not_at_all(tmp_path, cfg, monkeypatch):
+    """A crash mid-write must not leave a half-serialised observation."""
+    from ceteris import store as store_mod
+
+    record = run_command([sys.executable, "-c", "pass"], cfg=cfg, echo=False, label="x")
+    real_replace = store_mod.os.replace
+
+    def fail_replace(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(store_mod.os, "replace", fail_replace)
+    with pytest.raises(OSError):
+        store_mod.save(record, tmp_path / "runs")
+    monkeypatch.setattr(store_mod.os, "replace", real_replace)
+    assert store_mod.all_runs(tmp_path / "runs") == [], "no partial record is readable"

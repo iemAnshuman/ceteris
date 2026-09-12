@@ -70,8 +70,12 @@ class Field:
             raise ValueError(f"malformed field: {raw!r}")
         try:
             state = State(raw["s"])
-        except ValueError as exc:
+        except (ValueError, TypeError) as exc:
             raise ValueError(f"unknown field state: {raw['s']!r}") from exc
+        if state is State.VALUE and "v" not in raw:
+            raise ValueError("malformed value field: missing 'v'")
+        if state is not State.VALUE and "v" in raw:
+            raise ValueError("a non-value field must not carry 'v'")
         return cls(
             state=state,
             value=raw.get("v"),
@@ -160,6 +164,37 @@ class Fingerprint:
     def dumps(self) -> str:
         return json.dumps(self.to_json(), sort_keys=True, indent=2) + "\n"
 
+    def validate(self) -> None:
+        """Validate decision inputs for both imported and library records."""
+        if not isinstance(self.run, dict):
+            raise ValueError("not a ceteris fingerprint: 'run' is not an object")
+        if self.run and type(self.run.get("exit_code")) is not int:
+            raise ValueError("a run must carry an integer exit_code")
+        if "drift_observed" in self.run and type(self.run["drift_observed"]) is not bool:
+            raise ValueError("drift_observed must be a boolean")
+        if "drift" in self.run and not isinstance(self.run["drift"], list):
+            raise ValueError("drift must be an array")
+        for key in ("harness", "case_coverage", "session"):
+            if key in self.run and not isinstance(self.run[key], dict):
+                raise ValueError(f"run.{key} must be an object")
+        coverage = self.run.get("case_coverage", {})
+        for key in ("expected", "missing", "observed", "unexpected"):
+            if key in coverage and (not isinstance(coverage[key], list)
+                                     or any(not isinstance(x, str) for x in coverage[key])):
+                raise ValueError(f"case_coverage.{key} must be an array of strings")
+        if "exports" in self.run and (not isinstance(self.run["exports"], list)
+                                      or any(not isinstance(x, dict) for x in self.run["exports"])):
+            raise ValueError("run.exports must be an array of objects")
+        if "execution_id" in self.meta and (not isinstance(self.meta["execution_id"], str)
+                                             or not self.meta["execution_id"].strip()):
+            raise ValueError("meta.execution_id must be a nonempty string")
+        if "schema_version" in self.meta and (type(self.meta["schema_version"]) is not int
+                                               or self.meta["schema_version"] not in (1, 2, 3)):
+            raise ValueError("unsupported legacy fingerprint schema_version")
+        if self.run.get("parent_run_id") is not None:
+            if not isinstance(self.run["parent_run_id"], str) or not self.run["parent_run_id"].strip():
+                raise ValueError("parent_run_id must be a nonempty string or null")
+
     @classmethod
     def from_json(cls, raw: Any) -> "Fingerprint":
         if not isinstance(raw, dict) or "fields" not in raw:
@@ -168,14 +203,18 @@ class Fingerprint:
         if not isinstance(fields_raw, dict):
             raise ValueError("not a ceteris fingerprint: 'fields' is not an object")
         fields = {k: Field.from_json(v) for k, v in fields_raw.items()}
-        meta = raw.get("meta") or {}
+        meta = raw.get("meta", {})
         if not isinstance(meta, dict):
             raise ValueError("not a ceteris fingerprint: 'meta' is not an object")
-        metrics_raw = raw.get("metrics") or {}
+        metrics_raw = raw.get("metrics", {})
+        if not isinstance(metrics_raw, dict):
+            raise ValueError("not a ceteris fingerprint: 'metrics' is not an object")
         metrics = {k: Field.from_json(v) for k, v in metrics_raw.items()}
-        return cls(
+        result = cls(
             fields=fields,
             meta=dict(meta),
-            run=dict(raw.get("run") or {}),
+            run=raw.get("run", {}),
             metrics=metrics,
         )
+        result.validate()
+        return result

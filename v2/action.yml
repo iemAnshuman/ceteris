@@ -1,7 +1,7 @@
 name: ceteris v2
 description: >-
-  Run a reviewed benchmark experiment on the base and head of a pull request
-  and report whether the comparison satisfies its declared policy.
+  Experimental scaffold, unavailable for use. Campaign execution and
+  acceptance verification are not implemented; this action fails before setup.
 branding:
   icon: check-circle
   color: green
@@ -67,6 +67,11 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Refuse unavailable experimental workflow
+      shell: bash
+      run: |
+        echo '::error::ceteris v2 is experimental and has no campaign runner or acceptance verifier. Use the root capture/compare Action.' >&2
+        exit 2
     # 1. Install ceteris before entering any candidate worktree, so the tool
     #    doing the measuring never comes from the revision under test.
     - uses: actions/setup-python@v5
@@ -109,7 +114,7 @@ runs:
           fi
         done
         campaign="$(python -c 'import uuid; print(uuid.uuid4())')"
-        root="${STORE_ROOT:-$RUNNER_TEMP/ceteris}"
+        root="${STORE_ROOT:-$RUNNER_TEMP/ceteris}/$campaign"
         mkdir -p "$root"
         {
           echo "base=$base"

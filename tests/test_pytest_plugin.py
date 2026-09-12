@@ -139,3 +139,24 @@ def test_no_expectation_declared_is_incomplete_rather_than_vacuously_sufficient(
     from ceteris.pytest_plugin import expected_case_coverage
 
     assert expected_case_coverage([], ["a"])["state"] == "incomplete"
+
+
+def test_real_sessions_missing_required_case_fail_comparison(pytester, monkeypatch):
+    from ceteris.cli import main
+    from ceteris.compare import EXIT_INDETERMINATE
+    store = pytester.path / "runs"
+    monkeypatch.setenv("CETERIS_STORE", str(store))
+    pytester.makepyfile(test_case="""
+        def test_present(benchmark):
+            assert benchmark(lambda: 1) == 1
+    """)
+    for _ in range(2):
+        result = pytester.runpytest_subprocess(
+            "--ceteris", "--ceteris-expect-case", "pytest.test_missing.median_s",
+            "--benchmark-max-time=0.01", "--benchmark-min-rounds=2", "-q")
+        result.assert_outcomes(passed=1)
+    assert len(list(store.glob("*.json"))) == 2
+    # pytester injects a different --basetemp for each subprocess. Declare
+    # that test-harness variation to isolate the missing-case gate.
+    assert main(["compare", "--store", str(store), "--certify",
+                 "--vary", "execution.program_args"]) == EXIT_INDETERMINATE

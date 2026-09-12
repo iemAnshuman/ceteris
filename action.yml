@@ -39,49 +39,76 @@ runs:
         python-version: ${{ inputs.python-version }}
     - name: Install ceteris
       shell: bash
-      run: python -m pip install -q "${{ github.action_path }}"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: python -m pip install -q "$ACTION_PATH"
+    - name: Prepare isolated evidence directory
+      id: prepare
+      shell: bash
+      run: |
+        set -euo pipefail
+        root="$(mktemp -d "$RUNNER_TEMP/ceteris.XXXXXXXX")"
+        echo "root=$root" >> "$GITHUB_OUTPUT"
     - name: Benchmark base
       shell: bash
       env:
-        CETERIS_STORE: ${{ runner.temp }}/ceteris-runs
+        CETERIS_STORE: ${{ steps.prepare.outputs.root }}/runs
+        CETERIS_CONFIG: ${{ steps.prepare.outputs.root }}/config.json
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        METRIC: ${{ inputs.metric }}
+        REPEATS: ${{ inputs.repeats }}
+        COMMAND: ${{ inputs.command }}
         # Through the environment, not substituted into the script: an empty
         # build made `then ; fi`, a syntax error, and a build string is not
         # something to paste into a shell script unquoted.
         CETERIS_BUILD: ${{ inputs.build }}
       run: |
-        set -e
-        git fetch -q origin "${{ github.event.pull_request.base.sha || github.event.before }}" || true
-        git checkout -q "${{ github.event.pull_request.base.sha || github.event.before }}"
+        set -euo pipefail
+        git fetch -q origin "$BASE" || git cat-file -e "${BASE}^{commit}"
+        git checkout -q --detach "$BASE"
+        # Freeze before the build or candidate checkout can alter the policy.
+        python -I - <<'PY'
+        import json, os
+        from pathlib import Path
+        from ceteris.config import Config
+        Path(os.environ["CETERIS_CONFIG"]).write_text(json.dumps(Config.load().freeze()))
+        PY
         if [ -n "$CETERIS_BUILD" ]; then bash -ec "$CETERIS_BUILD"; fi
-        args=()
-        while IFS= read -r m; do [ -n "$m" ] && args+=(--metric "$m"); done <<< "${{ inputs.metric }}"
-        ceteris run --label base --repeats "${{ inputs.repeats }}" "${args[@]}" -- ${{ inputs.command }}
+        python -I -m ceteris.action_run base
     - name: Benchmark head
       shell: bash
       env:
-        CETERIS_STORE: ${{ runner.temp }}/ceteris-runs
+        CETERIS_STORE: ${{ steps.prepare.outputs.root }}/runs
+        CETERIS_CONFIG: ${{ steps.prepare.outputs.root }}/config.json
+        CANDIDATE: ${{ github.event.pull_request.head.sha || github.sha }}
+        METRIC: ${{ inputs.metric }}
+        REPEATS: ${{ inputs.repeats }}
+        COMMAND: ${{ inputs.command }}
         CETERIS_BUILD: ${{ inputs.build }}
       run: |
-        set -e
-        git checkout -q "${{ github.event.pull_request.head.sha || github.sha }}"
+        set -euo pipefail
+        git fetch -q origin "$CANDIDATE" || git cat-file -e "${CANDIDATE}^{commit}"
+        git checkout -q --detach "$CANDIDATE"
         if [ -n "$CETERIS_BUILD" ]; then bash -ec "$CETERIS_BUILD"; fi
-        args=()
-        while IFS= read -r m; do [ -n "$m" ] && args+=(--metric "$m"); done <<< "${{ inputs.metric }}"
-        ceteris run --label head --repeats "${{ inputs.repeats }}" "${args[@]}" -- ${{ inputs.command }}
+        python -I -m ceteris.action_run head
     - name: Compare
       shell: bash
       env:
-        CETERIS_STORE: ${{ runner.temp }}/ceteris-runs
+        CETERIS_STORE: ${{ steps.prepare.outputs.root }}/runs
+        CETERIS_CONFIG: ${{ steps.prepare.outputs.root }}/config.json
+        EXTRA_VARY: ${{ inputs.vary }}
+        REQUIRE_SIGNAL: ${{ inputs.require-signal }}
+        REPORT_PATH: ${{ steps.prepare.outputs.root }}/report.txt
       run: |
         set +e
         # Base and head are different builds by design; everything else gates.
         vary=(--vary source --vary deps
               --vary execution.program_sha256 --vary execution.program_scripts_sha256
               --vary execution.subject_sha256 --vary execution.subject_scripts_sha256)
-        IFS=',' read -ra extra <<< "${{ inputs.vary }}"
+        IFS=',' read -ra extra <<< "$EXTRA_VARY"
         for v in "${extra[@]}"; do [ -n "$v" ] && vary+=(--vary "$v"); done
-        signal=""; [ "${{ inputs.require-signal }}" = "true" ] && signal="--require-signal"
-        ceteris compare --certify $signal "${vary[@]}" | tee report.txt
+        signal=""; [ "$REQUIRE_SIGNAL" = "true" ] && signal="--require-signal"
+        ceteris compare --config "$CETERIS_CONFIG" --certify $signal "${vary[@]}" | tee "$REPORT_PATH"
         code=${PIPESTATUS[0]}
-        { echo '## ceteris'; echo '```'; cat report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        { echo '## ceteris'; echo '```'; cat "$REPORT_PATH"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
         exit $code

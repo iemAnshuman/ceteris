@@ -138,7 +138,7 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="append a one-line certificate that `ceteris verify` can check")
 
     pln = sub.add_parser(
-        "plan", help="resolve an authored experiment into an immutable plan")
+        "plan", help="experimental: freeze a definition; no campaign execution is available")
     pln.add_argument("experiment", help="the authored experiment JSON")
     pln.add_argument("--profile", help="profile JSON to resolve against")
     pln.add_argument("--revision", action="append", default=[], metavar="VARIANT=COMMIT",
@@ -151,13 +151,13 @@ def _build_parser() -> argparse.ArgumentParser:
     mig.add_argument("-o", "--output", help="write the derivative record here")
     mig.add_argument("--json", action="store_true", help="machine-readable limitations")
 
-    bun = sub.add_parser("bundle", help="create and check offline evidence bundles")
+    bun = sub.add_parser("bundle", help="experimental: inspect bundles and check file integrity only")
     bunsub = bun.add_subparsers(dest="bundle_command", required=True)
     bver = bunsub.add_parser("verify", help="check a bundle against its receipt, offline")
     bver.add_argument("directory", help="the bundle directory")
     bver.add_argument("receipt", help="the ceteris-receipt line, quoted")
     bver.add_argument("--require-pass", action="store_true",
-                      help="also require that the comparison itself passed")
+                      help="require verified acceptance (unavailable in this experimental CLI; fails closed)")
     bver.add_argument("--require-level", choices=("records_only", "evidence_complete",
                                                   "reproduction_ready"),
                       help="the minimum availability level this use needs")
@@ -389,8 +389,6 @@ def _cmd_plan(args) -> int:
     from . import experiment as experiment_mod
 
     document = _json.loads(Path(args.experiment).read_text(encoding="utf-8"))
-    profile = (_json.loads(Path(args.profile).read_text(encoding="utf-8"))
-               if args.profile else {"id": "diagnostic", "version": 1})
     revisions = {}
     for item in args.revision:
         name, _, commit = item.partition("=")
@@ -404,7 +402,14 @@ def _cmd_plan(args) -> int:
             sys.stderr.write(f"ceteris: {problem}\n")
         return EXIT_USAGE
 
+    if not args.profile:
+        raise ValueError(
+            f"profile {document.get('profile')!r} is not installed; provide its reviewed "
+            "JSON contents with --profile. No diagnostic profile is substituted.")
+    profile = _json.loads(Path(args.profile).read_text(encoding="utf-8"))
+
     plan = experiment_mod.resolve(document, profile=profile, revisions=revisions)
+    sys.stderr.write("ceteris: experimental plan only; campaign execution is not available\n")
     text = _json.dumps(plan.to_json(), indent=2, sort_keys=True) + "\n"
     if args.output:
         Path(args.output).write_text(text, encoding="utf-8")
@@ -448,8 +453,7 @@ def _cmd_bundle(args) -> int:
     from . import bundle as bundle_mod
 
     if args.bundle_command == "inspect":
-        manifest = _json.loads(
-            (Path(args.directory) / "manifest.json").read_text(encoding="utf-8"))
+        manifest = bundle_mod.inspect(args.directory)
         sys.stdout.write(f"{manifest['kind']} schema {manifest['schema_version']}, "
                          f"{manifest['availability_level']}\n")
         sys.stdout.write(f"  canonicalization: {manifest['canonicalization']}\n")

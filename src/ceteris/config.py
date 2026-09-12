@@ -88,6 +88,15 @@ class Config:
                 if Path(candidate).is_file():
                     user_path = candidate
                     break
+        user = _load_file(Path(user_path)) if user_path is not None else None
+        if isinstance(user, dict) and user.get("kind") == "ceteris.frozen-config":
+            if user.get("schema_version") != 1 or user.get("engine") != POLICY_ENGINE:
+                raise ValueError("unsupported frozen config schema or policy engine")
+            if packs:
+                raise ValueError("cannot add packs to a frozen config")
+            cfg = cls(**user["config"])
+            cfg.validate()
+            return cfg
         raw = _load_file(DEFAULTS_PATH)
         cfg = cls(
             env_allowlist=list(raw.get("capture", {}).get("env_allowlist", [])),
@@ -98,10 +107,22 @@ class Config:
             packs=list(raw.get("packs", [])),
         )
         if user_path is not None:
-            cfg.merge(_load_file(Path(user_path)))
+            cfg.merge(user)
         cfg.validate()
         cfg.activate_packs(list(cfg.packs) + list(packs or []), tree)
         return cfg
+
+    def freeze(self) -> dict:
+        """The complete trusted config, including already resolved pack data.
+
+        Reloading this document neither discovers cwd config nor activates
+        packs from candidate source markers or PATH.
+        """
+        from dataclasses import asdict
+
+        config = json.loads(json.dumps({k: v for k, v in asdict(self).items() if not k.startswith("_")}))
+        return {"kind": "ceteris.frozen-config", "schema_version": 1,
+                "engine": POLICY_ENGINE, "config": config}
 
     def activate_packs(self, forced: list[str], tree: str | None) -> None:
         """Merge every applicable ecosystem pack into the capture lists."""

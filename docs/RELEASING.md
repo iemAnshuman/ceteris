@@ -11,23 +11,34 @@ channel wraps that sdist. Nothing is built by hand.
 2. Commit, then tag and push the tag:
 
    ```sh
-   git tag v0.3.0
-   git push origin main v0.3.0
+   git tag v0.4.0
+   git push origin main v0.4.0
    ```
 
-3. `.github/workflows/release.yml` builds from the tag, checks the
-   distributions with twine, publishes to PyPI through trusted publishing,
-   and opens a GitHub release with the changelog section as its notes and
-   the files attached. Watch it under Actions; if the PyPI step fails, fix
+3. `.github/workflows/release.yml` first runs the reusable Ubuntu/macOS ×
+   Python 3.9–3.14 test workflow against the tagged commit. Only after all
+   matrix jobs pass does it build from the tag and check the
+   distributions with twine. It publishes to PyPI when trusted publishing
+   is enabled and opens a GitHub release with the changelog section as its
+   notes and the files attached. Watch it under Actions; if the PyPI step fails, fix
    the trusted-publisher setup below and re-run the job, do not upload by
    hand into the same version.
 4. On the GitHub release page tick *Publish this Action to the GitHub
-   Marketplace* the first time, so `iemAnshuman/ceteris@v0.3.0` is
+   Marketplace* the first time, so `iemAnshuman/ceteris@v0.4.0` is
    discoverable there. Move the `v0` tag when a compatible release lands:
 
    ```sh
-   git tag -f v0 v0.3.0 && git push -f origin v0
+   git tag -f v0 v0.4.0 && git push -f origin v0
    ```
+
+   Only full `vMAJOR.MINOR.PATCH` tags trigger publishing. Moving `v0` does
+   not start a second release build or fail the full-version guard.
+
+The 0.4 release supports the legacy capture/compare workflow. The planned
+campaign runner, installed native profiles, the `v2/` Action, and schema-4
+acceptance/availability verification are excluded from release claims. The
+experimental commands must continue to fail unsupported assurance requests.
+Consult [SUPPORT.md](SUPPORT.md) before expanding that scope.
 
 One-time setup on PyPI: project `ceteris`, *Publishing*, add a GitHub
 publisher with owner `iemAnshuman`, repository `ceteris`, workflow
@@ -35,21 +46,20 @@ publisher with owner `iemAnshuman`, repository `ceteris`, workflow
 `PYPI_TRUSTED_PUBLISHING` to `true` so the publish job stops being skipped.
 After that the account token on this laptop can be deleted.
 
-Until then the upload is done by hand from the tag:
+Until then, wait for the tag's release workflow to finish successfully and
+upload its attached distributions using local PyPI credentials:
 
 ```sh
-git clone . /tmp/rel && cd /tmp/rel && git checkout v0.3.0
-python -m build && twine check dist/* && twine upload dist/*
-gh release upload v0.3.0 dist/* --clobber
+gh release download v0.4.0 --repo iemAnshuman/ceteris --dir /tmp/ceteris-release-0.4.0
+python -m twine check /tmp/ceteris-release-0.4.0/*
+python -m twine upload --non-interactive /tmp/ceteris-release-0.4.0/*
 ```
 
-The last line matters. The workflow attaches artifacts it built itself, and
-two builds of one tag differ in their archive timestamps, so the release
-page would otherwise offer files that are not the ones on PyPI. For a tool
-about comparing like with like, the release assets and the PyPI files are
-the same bytes.
+Upload those exact files. Rebuilding the tag can change archive timestamps;
+the GitHub release and PyPI must offer the same bytes. Check the published
+SHA-256 digests against the downloaded files after upload.
 
-`v0.3.0` was released this way on 2026-09-04; sdist sha256
+`v0.3.0` used a local build and matching GitHub assets on 2026-09-04; sdist sha256
 `f301e7a5ab746dec98307fce30d1096b063a70671b00eba98de59b88c0da0484`.
 
 ## What users run to update

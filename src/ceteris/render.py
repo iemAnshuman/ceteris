@@ -172,6 +172,12 @@ def render(report: Report) -> str:
     out.extend(_results_table(report))
     out.extend(_noise_section(report))
 
+    if report.incomplete_runs:
+        out.append("INCOMPLETE RUN EVIDENCE (not certifiable):")
+        for fingerprint, reason in report.incomplete_runs:
+            out.append(f"  {fingerprint.label}: {reason}")
+        out.append("")
+
     if report.uncovered:
         out.append("NO EVIDENCE CAPTURED (nothing here can be certified):")
         for label in report.uncovered:
@@ -285,6 +291,8 @@ def to_json(report: Report) -> dict[str, Any]:
         "matched": report.matched_count,
         "warnings": report.warnings,
         "uncovered": report.uncovered,
+        "incomplete_runs": [{"run": fp.label, "reason": reason}
+                            for fp, reason in report.incomplete_runs],
         "failed_runs": [
             {"run": f.label, "exit_code": f.run.get("exit_code")} for f in report.failed_runs
         ],

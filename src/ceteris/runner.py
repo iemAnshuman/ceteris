@@ -22,12 +22,13 @@ Wrapping the run gets three things that a standalone capture cannot have:
 from __future__ import annotations
 
 import datetime as _dt
+import codecs
 import os
 import signal
 import subprocess
 import sys
 import time
-from collections import deque
+import uuid
 from typing import Any
 
 from . import adapters, execution
@@ -52,23 +53,24 @@ class _Spool:
     """
 
     def __init__(self, limit: int = MAX_OUTPUT):
+        if type(limit) is not int or limit < 1:
+            raise ValueError("output limit must be a positive byte count")
         self.limit = limit
-        self._lines: "deque[str]" = deque()
-        self._size = 0
+        self._tail = b""
         self.total = 0
         self.dropped = 0
 
-    def add(self, line: str) -> None:
-        self._lines.append(line)
-        self._size += len(line)
-        self.total += len(line)
-        while self._size > self.limit and len(self._lines) > 1:
-            gone = self._lines.popleft()
-            self._size -= len(gone)
-            self.dropped += len(gone)
+    def add(self, chunk) -> None:
+        data = chunk.encode("utf-8") if isinstance(chunk, str) else chunk
+        self.total += len(data)
+        self._tail = (self._tail + data[-self.limit:])[-self.limit:]
+        self.dropped = self.total - len(self._tail)
 
     def text(self) -> str:
-        return "".join(self._lines)[-self.limit:]
+        # Match the old text-mode reader's universal newlines for metric and
+        # adapter parsing; retention limits and counters still use raw bytes.
+        text = self._tail.decode("utf-8", errors="replace")
+        return text.replace("\r\n", "\n").replace("\r", "\n")
 
     @property
     def truncated(self) -> bool:
@@ -163,6 +165,7 @@ def run_command(
 ) -> Fingerprint:
     """Capture, run the command, capture again, and assemble one record."""
     cfg = cfg or Config.load()
+    execution_id = str(uuid.uuid4())
     kwargs = dict(
         repo=repo,
         cmake_cache=cmake_cache,
@@ -190,6 +193,12 @@ def run_command(
     # thing it became, identically across runs, with no drift. See design F03.
     subjects = chosen.subject(command) if chosen else None
     execution_before = execution.collect(command, subjects=subjects)
+    # Explicit imports belong to this execution only if their named files
+    # were written during it. Never delete a caller-owned export.
+    imports = []
+    for item in ingest or []:
+        path, _, fmt = item.partition(":")
+        imports.append((path, fmt or None, adapters.snapshot(path)))
 
     started = _dt.datetime.now(_dt.timezone.utc)
     wall_started = time.time()
@@ -200,11 +209,7 @@ def run_command(
             plan.argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
-            # A benchmark that prints one byte outside UTF-8 must not lose
-            # its record; the tail of its output is evidence, not data.
-            errors="replace",
-            bufsize=1,
+            env={**os.environ, "CETERIS_PARENT_RUN_ID": execution_id},
             # Its own process group, so termination can reach the children a
             # launcher starts rather than only the launcher.
             start_new_session=_POSIX,
@@ -214,11 +219,17 @@ def run_command(
 
     assert proc.stdout is not None
     try:
-        for line in proc.stdout:
-            spool.add(line)
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        while True:
+            chunk = proc.stdout.read1(8192)
+            if not chunk:
+                break
+            spool.add(chunk)
             if echo:
-                sys.stdout.write(line)
+                sys.stdout.write(decoder.decode(chunk))
                 sys.stdout.flush()
+        if echo:
+            sys.stdout.write(decoder.decode(b"", final=True))
         exit_code = proc.wait()
     except KeyboardInterrupt:
         # Do not leave the benchmark, or anything it started, running behind
@@ -268,15 +279,17 @@ def run_command(
         finally:
             if plan.added_output and plan.output and os.path.exists(plan.output):
                 os.unlink(plan.output)
-    for item in ingest or []:
-        path, _, fmt = item.partition(":")
-        metrics.update(adapters.ingest(path, fmt or None))
+    for path, fmt, before_export in imports:
+        imported, claim = adapters.ingest_evidence(path, fmt, before_export, wall_started)
+        metrics.update(imported)
+        record.setdefault("exports", []).append(claim)
     patterns = dict(getattr(cfg, "metrics", {}) or {})
     patterns.update(metric_patterns or {})
     if patterns:
         metrics.update(extract(output, patterns))
 
     meta = dict(before.meta)
+    meta["execution_id"] = execution_id
     meta["kind"] = "run"
     if chosen:
         meta["adapter"] = chosen.name

@@ -59,6 +59,13 @@ def record_digest(fp: Fingerprint) -> str:
         "exit_code": fp.run.get("exit_code"),
         "drift": fp.drift,
     }
+    # Older schema-2 examples retain their historical digest. All execution
+    # evidence used by the tightened decision path must also be authenticated.
+    evidence_keys = {"harness", "exports", "case_coverage", "drift_observed",
+                     "session", "parent_run_id"}
+    if fp.meta.get("execution_id") or evidence_keys.intersection(fp.run):
+        payload["execution_id"] = fp.meta.get("execution_id")
+        payload["run_evidence"] = fp.run
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()

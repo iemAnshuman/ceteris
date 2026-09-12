@@ -184,7 +184,7 @@ class Report:
             return EXIT_UNDECLARED
         if self.indeterminates:
             return EXIT_INDETERMINATE
-        if self.failed_runs or self.drifted or self.uncovered:
+        if self.failed_runs or self.drifted or self.uncovered or self.incomplete_runs:
             return EXIT_INDETERMINATE
         if self.strict and (self.constant_declarations or self.unmatched_declarations):
             return EXIT_UNDECLARED
@@ -219,6 +219,24 @@ class Report:
         """Runs whose environment changed while they were running. Such a run
         has no single well-defined identity, so it cannot be certified."""
         return [f for f in self.sources if f.drift]
+
+    @property
+    def incomplete_runs(self) -> list[tuple[Fingerprint, str]]:
+        out = []
+        for fp in self.sources:
+            if fp.run.get("drift_observed") is False:
+                out.append((fp, "pre/post observation was unavailable"))
+            coverage = fp.run.get("case_coverage") or {}
+            missing = sorted(set(coverage.get("missing", [])) | {
+                case for case in coverage.get("expected", [])
+                if case not in fp.metrics or not fp.metrics[case].is_known})
+            if missing or (coverage.get("expected") and coverage.get("state") != "sufficient"):
+                out.append((fp, "required benchmark cases are missing: " +
+                            ", ".join(missing)))
+            for export in fp.run.get("exports", []):
+                if export.get("validity") in ("invalid", "unavailable"):
+                    out.append((fp, str(export.get("detail", "invalid export evidence"))))
+        return out
 
 
 def harness_validity(fp: Fingerprint) -> str:
@@ -300,15 +318,20 @@ class DuplicateObservation(ValueError):
 def observation_digest(fp: Fingerprint) -> str:
     """Identity of an observation, for duplicate detection only.
 
-    Everything the producer wrote, minus where the file happens to sit. Two
-    genuine repeats differ in `captured_at` and in their measurements; a
-    copy is identical in every byte.
+    New records carry a producer-assigned execution ID. Legacy records use
+    their content without presentation or storage metadata; copies retain
+    that identity even when relabelled.
     """
     import hashlib
     import json
 
+    execution_id = fp.run.get("parent_run_id") or fp.meta.get("execution_id")
+    if execution_id:
+        return "execution:" + execution_id
     body = fp.to_json()
-    meta = {k: v for k, v in body.get("meta", {}).items() if k != "source_file"}
+    # Presentation and storage metadata cannot create a new observation.
+    ignored = {"source_file", "label", "series", "repeat", "content_hash"}
+    meta = {k: v for k, v in body.get("meta", {}).items() if k not in ignored}
     payload = {**body, "meta": meta}
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
@@ -329,7 +352,7 @@ def _reject_duplicates(fingerprints: Sequence[Fingerprint]) -> None:
                 + "). Copying a record or naming it twice does not make a "
                 "second measurement; record another run instead. If these "
                 "really are separate executions, recapture them so each "
-                "carries its own timestamp."
+                "carries its own execution identity."
             )
         seen[digest] = fp.label
 
@@ -344,6 +367,8 @@ def compare(
 ) -> Report:
     if len(fingerprints) < 2:
         raise ValueError("compare needs at least two fingerprints")
+    for fingerprint in fingerprints:
+        fingerprint.validate()
     _reject_duplicates(fingerprints)
     cfg = cfg or Config.load()
     waive = dict(waive or {})

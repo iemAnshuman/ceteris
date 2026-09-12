@@ -13,10 +13,8 @@ Library use mirrors the CLI:
     report = compare([a, b], vary=["runtime.env.LCI_ATTR_PACKET_SIZE"])
     assert report.exit_code == 0
 
-`capture()` returning a plain Fingerprint (rather than writing a file) is what
-would let a future `ceteris run -- mpirun ...` wrapper call it before and after
-a job to detect mid-run drift. Nothing in v1 uses that, but the shape is cheap
-to preserve now and expensive to retrofit.
+`ceteris run -- mpirun ...` captures before and after the command to detect
+mid-run drift and records measurements with the execution evidence.
 """
 
 from .compare import Report, compare

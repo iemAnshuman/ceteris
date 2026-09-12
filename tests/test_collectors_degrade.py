@@ -89,7 +89,8 @@ def test_two_amd_machines_do_not_compare_as_agreeing(monkeypatch, ctx, cfg):
     monkeypatch.setattr(hw_col, "_gpu_driver_evidence", lambda: ["amdgpu kernel module"])
     a, b = {}, {}
     hw_col._gpu(a); hw_col._gpu(b)
-    report = compare([Fingerprint(a, {"label": "n1"}), Fingerprint(b, {"label": "n2"})], cfg=cfg)
+    from conftest import distinct_meta
+    report = compare([Fingerprint(a, distinct_meta("n1")), Fingerprint(b, distinct_meta("n2"))], cfg=cfg)
     assert report.exit_code == EXIT_INDETERMINATE
 
 
@@ -417,8 +418,9 @@ def test_two_runs_without_git_do_not_match_on_commit(monkeypatch, ctx, tmp_path)
     monkeypatch.setattr(src_col, "run", missing)
     ctx.repo = str(tmp_path)
     fields = src_col.collect(ctx)
-    a = Fingerprint(dict(fields), {"label": "run-a"})
-    b = Fingerprint(dict(fields), {"label": "run-b"})
+    from conftest import distinct_meta
+    a = Fingerprint(dict(fields), distinct_meta("run-a"))
+    b = Fingerprint(dict(fields), distinct_meta("run-b"))
     assert compare([a, b], cfg=ctx.cfg).exit_code == EXIT_INDETERMINATE
 
 

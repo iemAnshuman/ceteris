@@ -1,6 +1,39 @@
 # Changelog
 
-## 0.4.0 (unreleased)
+## 0.4.0 (2026-09-12)
+
+This release tightens evidence checks in the capture/compare workflow. Planned
+campaigns, the `v2/` Action, and schema-4 acceptance verification remain
+experimental and are excluded from the supported scope. See [SUPPORT.md](docs/SUPPORT.md).
+
+### Shipment review repairs (9–11 September)
+
+- Give each new execution a stable ID and reject relabelled copies, including
+  wrapper/plugin views of the same pytest session. Legacy duplicate detection
+  ignores presentation and storage metadata.
+- Bind new execution evidence into certificates. Reject malformed imported
+  fields and exit codes before comparison; missing required pytest cases and
+  explicit unavailable pre/post observation block certification.
+- Apply freshness and harness-validity checks to explicit `--ingest` exports.
+  Missing measurements within a configuration remain unassessed instead of
+  disappearing from the signal check.
+- Stream output in bounded byte chunks, including long lines, and record
+  accurate dropped-byte counts. Preserve newline normalization for CRLF and
+  CR output so line-anchored metric patterns keep working. Return detached
+  views of frozen plans.
+- Freeze the root Action's base configuration before building and use it
+  throughout capture and comparison. Give each invocation its own evidence
+  directory; parse command inputs as argv instead of shell interpolation.
+- Check bundle paths and size limits before reading, including ancestor
+  symlinks. The experimental bundle CLI verifies integrity only and refuses
+  unsupported acceptance and availability claims.
+- Require an explicit matching profile and full commit IDs for experimental
+  plans. Keep the unfinished v2 Action disabled before setup. Campaigns and
+  schema-4 acceptance are excluded from the 0.4 release scope.
+- Make release builds depend on the test matrix; exclude floating major tags
+  from publishing triggers. Clarify the supported scope and signal semantics.
+
+### Earlier design repairs
 
 The twelve correctness repairs in Section 3 of [the design](docs/DESIGN.md).
 Each was reproduced first, each has a regression test named for its issue,
@@ -67,16 +100,6 @@ could report a false success.
   end and wrote an empty drift list; it now observes both ends, or says it
   could not.
 
-### The protocol foundation (WP03), not yet written by any command
-
-`ceteris.protocol` arrives alongside the shipped format rather than
-replacing it. It carries the canonical encoding `ceteris-json-v1` with byte
-vectors frozen in `tests/fixtures/protocol/encoding_vectors.json`, exact
-decimals and rationals, the schema 4 typed values for fields, capabilities
-and metric observations, and a strict validator that reports structured
-issues with stable codes instead of raising. Nothing reads or writes schema
-4 yet; `ceteris run` still produces schema 3.
-
 ### The protocol, built alongside the shipped format (WP03 to WP11, WP15)
 
 None of this replaces schema 3 yet. `ceteris run` still writes schema 3, and
@@ -117,30 +140,22 @@ flow needs, each piece pure and separately testable:
   decide, with every dimension kept after one of them has settled the
   outcome.
 - **`bundle`** — `ceteris-receipt v3`, which carries a manifest reference and
-  nothing else, because a claim printed on the line is a claim nobody
-  checked. Verification is offline, read-only, refuses paths that escape the
-  bundle, and separates whether the bundle is genuine from whether it passed
-  and from whether it is sufficient for a given use.
+  no verdict. CLI verification is offline, read-only, and checks file
+  integrity with bounded reads that refuse symlinks. Acceptance requires a
+  trusted recomputation callback at the library level; the CLI cannot verify
+  acceptance or availability beyond records-only packaging.
 - **`migration`** — reads schema 2 and 3 without letting them gain evidence.
   Every gap becomes a named limitation, and a legacy record qualifies for a
   policy only when it genuinely satisfies it.
 
-New commands: `ceteris plan`, `ceteris migrate`, `ceteris bundle verify`,
-`ceteris bundle inspect`.
+Experimental commands: `ceteris plan`, `ceteris migrate`, `ceteris bundle verify`,
+`ceteris bundle inspect`. These do not provide an executable campaign workflow.
 
 ### Integrations and the report page (WP12 to WP14)
 
-- **`v2/action.yml`** is a new major version of the GitHub Action; version 1
-  keeps its own input meanings so no pinned workflow changes behaviour. The
-  experiment is read from the *base* revision, so a pull request cannot lower
-  a threshold, drop a metric, widen declared variation or switch off a
-  correctness check by editing it. ceteris installs before any candidate
-  worktree exists. Both revisions must actually be obtainable; a failed fetch
-  never proceeds against whatever happens to be checked out. Every input
-  reaches the shell through the environment rather than being interpolated
-  into a script. The summary and the upload happen even when the comparison
-  failed, under an invocation-unique name, and cleanup touches only the
-  worktrees the action created. It posts nothing.
+- **`v2/action.yml`** is a disabled scaffold for the planned campaign workflow.
+  It exits before installation, checkout, or builds. The supported root Action
+  runs legacy comparisons using the base configuration frozen before builds.
 - **The pytest plugin** treats one session as one outer execution. Twenty
   pairs means twenty sessions per variant, never twenty inner rounds in one.
   It records the session's own outcome, so a test failure is failed
@@ -161,10 +176,10 @@ New commands: `ceteris plan`, `ceteris migrate`, `ceteris bundle verify`,
 
 ### Migration
 
-Certificates issued before this release report a configuration mismatch,
-because F02 and F08 changed the policy identity. That is the mechanism
-working: re-issue them with `ceteris compare --certify`. Version 1
-certificates are refused outright rather than checked.
+Policy and evidence-digest changes can require reissuing older certificates
+with `ceteris compare --certify`. Verification recomputes the comparison;
+it does not upgrade an old claim automatically. The committed schema-2
+Hyperfine example still verifies. Version 1 certificates are refused.
 
 ## 0.3.0 (2026-09-04)
 

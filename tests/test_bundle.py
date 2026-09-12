@@ -67,7 +67,7 @@ def test_a_written_bundle_verifies_against_its_receipt(tmp_path):
     root, receipt = written(tmp_path)
     result = b.verify(root, receipt.line())
     assert result.integrity and result.problems == []
-    assert result.acceptance == "passed"
+    assert result.acceptance is None and not result.supported_semantics
 
 
 def test_protocol_members_are_written_as_canonical_bytes(tmp_path):
@@ -110,13 +110,13 @@ def test_a_missing_listed_member_is_reported(tmp_path):
     root, receipt = written(tmp_path)
     (root / "records").glob("*.json").__next__().unlink()
     result = b.verify(root, receipt.line())
-    assert any("missing from the bundle" in p for p in result.problems)
+    assert any("missing" in p for p in result.problems)
 
 
 def test_a_bundle_with_no_manifest_is_refused(tmp_path):
     (tmp_path / "empty").mkdir()
     result = b.verify(tmp_path / "empty", b.Receipt("sha256:" + "a" * 64).line())
-    assert not result.integrity and "no manifest" in result.problems[0]
+    assert not result.integrity and "manifest.json" in result.problems[0]
 
 
 # --- integrity is not acceptance ----------------------------------------------
@@ -126,19 +126,21 @@ def test_a_faithfully_recorded_failure_has_perfect_integrity(tmp_path):
     root, receipt = written(tmp_path, report=a_report("failed"))
     result = b.verify(root, receipt.line())
     assert result.integrity is True
-    assert result.acceptance == "failed"
+    assert result.acceptance is None
 
 
 def test_require_pass_asks_the_other_question(tmp_path):
     root, receipt = written(tmp_path, report=a_report("failed"))
-    result = b.verify(root, receipt.line(), require_pass=True)
+    result = b.verify(root, receipt.line(), require_pass=True,
+                      recompute=lambda plan, records: a_report("failed"))
     assert result.integrity is True
     assert any("its result is failed" in p for p in result.problems)
 
 
 def test_a_passing_bundle_satisfies_require_pass(tmp_path):
     root, receipt = written(tmp_path)
-    assert b.verify(root, receipt.line(), require_pass=True).problems == []
+    assert b.verify(root, receipt.line(), require_pass=True,
+                    recompute=lambda plan, records: a_report()).problems == []
 
 
 def test_the_verifier_never_claims_the_experiment_was_honest(tmp_path):

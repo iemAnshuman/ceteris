@@ -4,10 +4,10 @@ Design section 13. The receipt is deliberately tiny:
 
     ceteris-receipt v3 manifest=sha256:<64 hex characters>
 
-It carries no verdict, no counts and no percentage, because a claim printed
-on the line is a claim nobody checked. Everything a reader sees is
-recomputed from the verified report; the manifest binds plan and report, and
-the report binds every selected record.
+It carries no verdict, counts or percentage. This experimental module checks
+the manifest and file integrity. Acceptance requires a trusted recomputation
+callback, which the CLI does not yet provide. Availability beyond basic
+records-only packaging is not evaluated.
 
 Verification is read-only and offline. It opens no network connection, runs
 no benchmark, executes nothing from the bundle, and never consults the
@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import os
 import posixpath
+import stat
 from dataclasses import dataclass, field as dcfield
 from pathlib import Path
 
@@ -79,7 +80,7 @@ def safe_member_path(name: str) -> str:
     refused before anything is opened, because a verifier that writes or
     reads outside the bundle root has stopped being read-only.
     """
-    if not name or name != name.strip():
+    if not isinstance(name, str) or not name or name != name.strip() or "\0" in name:
         raise _fail("invalid_member_path", f"{name!r} is not a usable member path")
     if name.startswith("/") or (len(name) > 1 and name[1] == ":"):
         raise _fail("invalid_member_path", f"{name!r} is absolute")
@@ -89,6 +90,64 @@ def safe_member_path(name: str) -> str:
     if any(part in ("", ".", "..") for part in parts):
         raise _fail("invalid_member_path", f"{name!r} contains an empty or traversing segment")
     return posixpath.join(*parts)
+
+
+def _read_member(root: Path, name: str, limit: int, keep: bool = True) -> tuple:
+    """Open each component without following links, then read bounded bytes.
+
+    Directory descriptors prevent a swapped ancestor symlink from redirecting
+    a later open outside the bundle. The supported platforms are POSIX.
+    """
+    parts = safe_member_path(name).split("/")
+    directories = []
+    descriptor = None
+    try:
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        directories.append(os.open(root, flags))
+        for part in parts[:-1]:
+            directories.append(os.open(part, flags, dir_fd=directories[-1]))
+        descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                             dir_fd=directories[-1])
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise BundleError(f"{name} is not a regular file")
+        if info.st_size > limit:
+            raise BundleError(f"{name} exceeds its size limit")
+        hasher, size, chunks = hashlib.sha256(), 0, []
+        while True:
+            chunk = os.read(descriptor, min(1 << 20, limit - size + 1))
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > limit:
+                raise BundleError(f"{name} exceeds its size limit")
+            hasher.update(chunk)
+            if keep:
+                chunks.append(chunk)
+        return b"".join(chunks), "sha256:" + hasher.hexdigest(), size
+    except OSError as exc:
+        raise BundleError(f"cannot read {name}: missing, unreadable, or symlinked member/ancestor ({exc.strerror})") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        for directory in reversed(directories):
+            os.close(directory)
+
+
+def inspect(root) -> dict:
+    """Read only the manifest; inspection makes no integrity or pass claim."""
+    raw, _, _ = _read_member(Path(root), "manifest.json", MAX_STRUCTURED_BYTES)
+    manifest = loads(raw)
+    if not isinstance(manifest, dict):
+        raise BundleError("manifest.json must be an object")
+    required = ("kind", "schema_version", "availability_level", "canonicalization", "files")
+    if any(key not in manifest for key in required):
+        raise BundleError("manifest.json is missing required metadata")
+    if not isinstance(manifest["files"], list) or any(
+            not isinstance(e, dict) or not {"path", "bytes", "role"}.issubset(e)
+            for e in manifest["files"]):
+        raise BundleError("manifest files must be member entries")
+    return manifest
 
 
 # --- receipts -----------------------------------------------------------------
@@ -125,16 +184,6 @@ def parse_receipt(line: str) -> Receipt:
 
 
 # --- writing ------------------------------------------------------------------
-
-
-def _file_digest(path: Path) -> tuple:
-    h = hashlib.sha256()
-    size = 0
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            h.update(chunk)
-            size += len(chunk)
-    return "sha256:" + h.hexdigest(), size
 
 
 def write(root, *, plan: dict, report: dict, records, evidence=(), omitted=(),
@@ -192,9 +241,9 @@ def write(root, *, plan: dict, report: dict, records, evidence=(), omitted=(),
     (root / "README.txt").write_text(
         "A ceteris bundle. Verify it with:\n\n"
         "    ceteris bundle verify <this directory> '<receipt line>'\n\n"
-        "Verification is offline and read-only. It recomputes the decision from\n"
-        "the frozen plan and the records; it does not rerun the benchmark, and\n"
-        "it does not execute anything from this directory.\n",
+        "Verification is offline and read-only. This experimental CLI checks\n"
+        "file integrity only; it cannot verify acceptance or evidence availability.\n"
+        "It does not rerun the benchmark or execute anything from this directory.\n",
         encoding="utf-8")
     return Receipt(object_digest(manifest))
 
@@ -214,7 +263,7 @@ class Verification:
     acceptance: "str | None" = None
     level: "str | None" = None
     producer_authentication: str = "none"
-    supported_semantics: bool = True
+    supported_semantics: bool = False
     problems: list = dcfield(default_factory=list)
     notes: list = dcfield(default_factory=list)
 
@@ -246,16 +295,14 @@ def verify(root, receipt_line: str, *, require_pass: bool = False,
     except ReceiptError as exc:
         return Verification(False, problems=[f"receipt: {exc}"])
 
-    manifest_path = root / "manifest.json"
-    if not manifest_path.is_file():
-        return Verification(False, problems=["the bundle has no manifest.json"])
-    raw = manifest_path.read_bytes()
-    if len(raw) > MAX_STRUCTURED_BYTES:
-        return Verification(False, problems=["manifest.json is over the size limit"])
     try:
+        raw, _, _ = _read_member(root, "manifest.json", MAX_STRUCTURED_BYTES)
         manifest = loads(raw)
-    except CanonicalError as exc:
+    except (CanonicalError, BundleError) as exc:
         return Verification(False, problems=[f"manifest.json: {exc}"])
+
+    if not isinstance(manifest, dict):
+        return Verification(False, problems=["manifest.json must be an object"])
 
     if object_digest(manifest) != receipt.manifest_digest:
         return Verification(
@@ -267,11 +314,19 @@ def verify(root, receipt_line: str, *, require_pass: bool = False,
             f"the bundle declares canonicalization "
             f"{manifest.get('canonicalization')!r}, which this build does not implement"])
 
-    entries = manifest.get("files") or []
+    if manifest.get("kind") != BUNDLE_KIND or type(manifest.get("schema_version")) is not int or manifest["schema_version"] != BUNDLE_SCHEMA:
+        return Verification(False, problems=["unsupported bundle kind or schema_version"])
+    if manifest.get("availability_level") not in LEVELS:
+        return Verification(False, problems=["unsupported availability_level"])
+    if required_level is not None and required_level not in LEVELS:
+        return Verification(False, problems=["unsupported required availability level"])
+    entries = manifest.get("files")
+    if not isinstance(entries, list) or any(not isinstance(e, dict) for e in entries):
+        return Verification(False, problems=["manifest files must be an array of objects"])
     if len(entries) > MAX_MEMBERS:
-        problems.append(f"{len(entries)} members exceeds the limit of {MAX_MEMBERS}")
+        return Verification(False, problems=[f"{len(entries)} members exceeds the limit of {MAX_MEMBERS}"])
 
-    seen, total = set(), 0
+    seen, total, structured = set(), 0, {}
     for entry in entries:
         try:
             safe = safe_member_path(entry.get("path", ""))
@@ -281,14 +336,20 @@ def verify(root, receipt_line: str, *, require_pass: bool = False,
         if safe in seen:
             problems.append(f"{safe} is listed more than once")
         seen.add(safe)
-        target = root / safe
-        if target.is_symlink():
-            problems.append(f"{safe} is a symlink; a bundle member must be a regular file")
+        keep = safe in REQUIRED_MEMBERS or safe.startswith("records/")
+        limit = MAX_STRUCTURED_BYTES if keep else MAX_EVIDENCE_BYTES
+        limit = min(limit, MAX_TOTAL_BYTES - total)
+        declared_size = entry.get("bytes")
+        if type(declared_size) is not int or declared_size < 0 or declared_size > limit:
+            problems.append(f"{safe} has an invalid or oversized byte count")
             continue
-        if not target.is_file():
-            problems.append(f"{safe} is listed in the manifest and missing from the bundle")
+        try:
+            raw, found, size = _read_member(root, safe, limit, keep)
+            if keep:
+                structured[safe] = loads(raw)
+        except (BundleError, CanonicalError) as exc:
+            problems.append(f"{safe}: {exc}")
             continue
-        found, size = _file_digest(target)
         total += size
         if size != entry.get("bytes"):
             problems.append(f"{safe} is {size} bytes, the manifest says {entry.get('bytes')}")
@@ -298,10 +359,13 @@ def verify(root, receipt_line: str, *, require_pass: bool = False,
         problems.append("the bundle exceeds the total size limit")
 
     listed = seen | {"manifest.json", "README.txt"}
-    for path in root.rglob("*"):
-        if path.is_file():
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        for name in dirs + files:
+            path = Path(directory) / name
             relative = path.relative_to(root).as_posix()
-            if relative not in listed:
+            if path.is_symlink():
+                problems.append(f"{relative} is a symlink")
+            elif name in files and relative not in listed:
                 problems.append(f"{relative} is present and not listed in the manifest")
 
     for member in REQUIRED_MEMBERS:
@@ -311,11 +375,11 @@ def verify(root, receipt_line: str, *, require_pass: bool = False,
     if problems:
         return Verification(False, level=manifest.get("availability_level"), problems=problems)
 
-    plan = loads((root / "plan.json").read_bytes())
-    report = loads((root / "report.json").read_bytes())
-    records = [loads((root / e["path"]).read_bytes())
-               for e in sorted(entries, key=lambda e: e["path"])
-               if e["path"].startswith("records/")]
+    # These are the exact bytes already hashed, not another read that can race.
+    plan, report = structured["plan.json"], structured["report.json"]
+    records = [structured[name] for name in sorted(structured) if name.startswith("records/")]
+    if not isinstance(plan, dict) or not isinstance(report, dict) or any(not isinstance(r, dict) for r in records):
+        return Verification(False, problems=["plan, report, and records must be objects"])
 
     if object_digest(plan) != manifest.get("plan_digest"):
         problems.append("the manifest's plan digest does not match plan.json")
@@ -325,6 +389,7 @@ def verify(root, receipt_line: str, *, require_pass: bool = False,
         problems.append("the report was computed against a different plan")
 
     notes = []
+    acceptance = None
     if recompute is not None:
         recomputed = recompute(plan, records)
         if recomputed != report:
@@ -333,31 +398,35 @@ def verify(root, receipt_line: str, *, require_pass: bool = False,
                 "produce; a displayed result has been changed")
         else:
             notes.append("the report was recomputed from the plan and the records and agreed")
+            acceptance = (recomputed.get("dimensions") or {}).get("acceptance")
+    else:
+        notes.append("acceptance verification unavailable: this experimental CLI checks file integrity only")
 
     # Everything above is about whether the bundle is genuine. What follows
     # is about whether it is sufficient for this use, which is a different
     # question and must not be reported as tampering.
     integrity = not problems
-    level = manifest.get("availability_level")
-    if required_level and LEVELS.index(level) < LEVELS.index(required_level):
-        problems.append(
-            f"this bundle is {level}; the requirement is {required_level}. An "
-            f"integrity-valid records-only bundle does not satisfy an "
-            f"evidence-complete sharing requirement.")
+    # Availability requires an evidence-closure evaluator, not a manifest label
+    # or a report callback. Only the basic packaging level is checked here.
+    level = "records_only"
+    if required_level in ("evidence_complete", "reproduction_ready"):
+        problems.append(f"availability verification unavailable for {required_level}; only records_only integrity is checked")
+    if require_pass and recompute is None:
+        problems.append("acceptance verification unavailable; cannot satisfy --require-pass")
 
-    acceptance = (report.get("dimensions") or {}).get("acceptance")
     result = Verification(
         integrity=integrity,
         acceptance=acceptance,
         level=level,
-        producer_authentication=manifest.get("producer_authentication", "none"),
+        producer_authentication="none",
+        supported_semantics=recompute is not None and integrity,
         problems=problems,
         notes=notes + [
             "digests detect changed content against a known receipt; they do not "
             "prove the recorded experiment was run honestly"
         ],
     )
-    if require_pass and result.integrity and acceptance not in ("passed", "passed_with_waivers"):
+    if require_pass and recompute is not None and result.integrity and acceptance not in ("passed", "passed_with_waivers"):
         result.problems.append(
             f"the bundle is genuine and its result is {acceptance}")
     return result

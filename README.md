@@ -4,19 +4,19 @@
 [![pypi](https://img.shields.io/pypi/v/ceteris)](https://pypi.org/project/ceteris/)
 [![python](https://img.shields.io/pypi/pyversions/ceteris)](https://pypi.org/project/ceteris/)
 
-**Wrap any benchmark. Refuse the comparison unless it is valid.**
+**Record benchmark conditions. Check what changed before comparing numbers.**
 
-A comparison of two benchmark numbers is valid if, and only if:
+ceteris wraps your benchmark harness and records the environment and program
+identity before and after each execution. `compare` exits non-zero for
+undeclared gating differences, failed executions, or incomplete required run
+evidence. It checks the evidence it captured; it cannot prove that every
+possible confound was observed or that an unsigned record was honestly produced.
 
-1. the only things that differ between the runs are the things you *meant* to vary, and
-2. the difference is bigger than the noise.
-
-Every benchmark harness -- hyperfine, Google Benchmark, JMH, pytest-benchmark,
-criterion, MLPerf, OSU -- does some of (2) and none of (1). Their own docs list
-the confounds and tell *you* to handle them: CPU governor, turbo, SMT, a stale
-build, a different library version, one node in sixteen on another driver.
-ceteris captures them, checks both conditions, and exits non-zero when either
-fails. It sits underneath the harness you already use.
+Add `--require-signal` to require at least one metric's gap to exceed its
+within-configuration spread, with at least three distinct executions and
+a readable measurement from every selected execution in every configuration.
+Without that option, the noise assessment is informational. This is a
+descriptive check, not a statistical significance or non-regression test.
 
 Named for *ceteris paribus*: all other things being equal.
 
@@ -540,6 +540,12 @@ says so under *declared but did not vary*.
 **pytest.** `pytest --ceteris` records the session; with pytest-benchmark
 installed, its results come along.
 
+Use `--ceteris-expect-case pytest.test_name.median_s` to require a benchmark
+case in the recorded evidence. A missing required case blocks subsequent
+comparison. Inner benchmark rounds count as one session, not independent
+repetitions. A wrapped pytest session shares its parent's execution identity,
+so its wrapper and plugin records cannot both contribute to one comparison.
+
 **A library.** `from ceteris import compare`, `from ceteris.runner import
 run_command`.
 
@@ -622,6 +628,13 @@ latency_us = "avg latency ([0-9.]+) us"
 The record format is specified in [`docs/SPEC.md`](docs/SPEC.md) so that
 harnesses can emit it directly.
 
+The root GitHub Action freezes this configuration from the base revision
+before building. Both variants and the final comparison use that frozen copy;
+candidate configuration cannot change the comparison rules. Its `command`
+input is parsed as quoted argv. Use an explicit `bash -c '...'` command for
+shell syntax. The Action continues to declare source/dependency and resulting
+program-hash changes as expected; declare additional variation explicitly.
+
 ## What it does not do
 
 - It does not measure. The harness measures; ceteris asks where the result went.
@@ -635,6 +648,19 @@ harnesses can emit it directly.
 ## Status
 
 The [development design](docs/DESIGN.md) defines the proposed comparison protocol, implementation sequence, and release gates.
+
+The 0.4 release scope is the existing `capture`, `run`, `compare`, `verify`,
+`doctor`, and pytest workflow. `plan`, `migrate`, the schema-4 libraries, and
+receipt-v3 bundles are experimental protocol work. `plan` requires an explicit
+reviewed profile JSON matching the authored profile and full commit IDs;
+installed profile resolution and campaign execution are not available.
+The `v2/` Action fails before setup and is not a supported integration.
+
+`bundle verify` checks file integrity only. It does not echo a stored passing
+verdict as verified acceptance. `--require-pass` and availability requirements
+above `records_only` fail because the necessary evaluators are not connected.
+The existing `verify` command for `ceteris-certified v2` certificates does
+recompute the legacy comparison. See [the support matrix](docs/SUPPORT.md).
 
 Beta. Every collector path that matters has run on real hardware, and the
 paths 0.3.0 changed were run again on the cluster before release. CI covers

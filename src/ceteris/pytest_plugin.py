@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import sys
 import time
+import uuid
 
 import pytest
 
@@ -87,7 +88,8 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     if not config.getoption("--ceteris"):
         return
-    config._ceteris = {"started": time.time(), "before": None}
+    config._ceteris = {"started": time.time(), "before": None,
+                       "execution_id": str(uuid.uuid4())}
 
 
 def pytest_sessionstart(session):
@@ -182,7 +184,7 @@ def pytest_sessionfinish(session, exitstatus):
     started = state["started"]
     record = Fingerprint(
         fields=fields,
-        meta=dict(fp.meta, kind="run", adapter="pytest"),
+        meta=dict(fp.meta, kind="run", adapter="pytest", execution_id=state["execution_id"]),
         run={
             "exit_code": int(exitstatus),
             "started_at": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(started)),

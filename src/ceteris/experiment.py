@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 from dataclasses import dataclass, field as dcfield
 from typing import Any
 
-from .protocol.encoding import CanonicalError, canonical_decimal, digest
+from .protocol.encoding import CanonicalError, canonical_bytes, canonical_decimal, digest, loads
 
 EXPERIMENT_KIND = "ceteris.experiment"
 EXPERIMENT_SCHEMA = 1
@@ -182,7 +183,7 @@ def validate_authored(document: dict) -> list:
 # --- the resolved plan --------------------------------------------------------
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class ResolvedPlan:
     """A frozen experiment: every default expanded, every order fixed.
 
@@ -191,7 +192,16 @@ class ResolvedPlan:
     the plan.
     """
 
-    body: dict
+    _encoded: bytes
+
+    def __init__(self, body: dict):
+        object.__setattr__(self, "_encoded", canonical_bytes(body))
+
+    @property
+    def body(self) -> dict:
+        # Every exposed view is detached; even nested mutations cannot change
+        # the frozen bytes or another view of the plan.
+        return loads(self._encoded)
 
     @property
     def digest(self) -> str:
@@ -218,7 +228,7 @@ class ResolvedPlan:
         return out
 
     def to_json(self) -> dict:
-        return dict(self.body)
+        return self.body
 
 
 def resolve(document: dict, *, profile: dict, revisions: "dict | None" = None,
@@ -231,6 +241,13 @@ def resolve(document: dict, *, profile: dict, revisions: "dict | None" = None,
     problems = validate_authored(document)
     _require(not problems, "; ".join(problems))
 
+    _require(isinstance(profile, dict) and isinstance(profile.get("id"), str)
+             and type(profile.get("version")) is int,
+             "a profile must have an id and integer version")
+    selected_profile = f"{profile['id']}@{profile['version']}"
+    _require(document.get("profile") == selected_profile,
+             f"experiment requires profile {document.get('profile')!r}, supplied {selected_profile!r}")
+
     revisions = revisions or {}
     sampling = dict(document.get("sampling") or {})
     order = sampling.get("order", "balanced-random")
@@ -240,8 +257,10 @@ def resolve(document: dict, *, profile: dict, revisions: "dict | None" = None,
     variants = []
     for variant in document["variants"]:
         resolved_revision = revisions.get(variant["id"], variant.get("revision"))
-        _require(resolved_revision is not None,
-                 f"variant {variant['id']!r} has no revision")
+        _require(isinstance(resolved_revision, str) and
+                 re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", resolved_revision) is not None,
+                 f"variant {variant['id']!r} needs a full immutable commit; "
+                 "supply --revision VARIANT=COMMIT instead of a branch or symbolic ref")
         variants.append({"id": variant["id"], "revision": resolved_revision,
                          "authored_revision": variant.get("revision")})
 

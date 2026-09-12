@@ -56,6 +56,33 @@ def test_output_is_captured_and_metrics_extracted(cfg):
     assert record.run["duration_s"] >= 0
 
 
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n", b"\r"], ids=["lf", "crlf", "cr"])
+def test_line_anchored_metrics_accept_universal_newlines(cfg, newline):
+    output = b"header" + newline + b"bw 42" + newline
+    record = run_command(
+        [sys.executable, "-c", f"import sys; sys.stdout.buffer.write({output!r})"],
+        cfg=cfg, echo=False, metric_patterns={"bw": r"^bw (\d+)$"},
+    )
+    assert record.metrics["bw"].value == 42
+    assert record.run["output"] == "header\nbw 42\n"
+    assert record.run["output_bytes_total"] == len(output)
+    assert record.run["output_bytes_dropped"] == 0
+    assert record.run["output_truncated"] is False
+
+
+def test_spool_normalizes_split_crlf_without_changing_byte_accounting():
+    from ceteris.runner import _Spool
+
+    spool = _Spool(8)
+    spool.add(b"discard\r\nbw 42\r")
+    spool.add(b"\n")
+    assert spool.text() == "\nbw 42\n"
+    assert spool._tail == b"\nbw 42\r\n"
+    assert spool.total == 16
+    assert spool.dropped == 8
+    assert spool.truncated is True
+
+
 def test_the_launcher_command_line_is_a_comparable_field(cfg):
     """`mpirun -n 16 --bind-to core` is where rank count and binding intent
     actually live. A standalone capture cannot see it."""
@@ -102,6 +129,7 @@ def test_mid_run_environment_change_is_detected(cfg, tmp_path):
 
     steady = copy.deepcopy(record)
     steady.meta["label"] = "steady"
+    steady.meta["execution_id"] = "synthetic-independent-steady-execution"
     steady.run["drift"] = []
     report = compare([record, steady], cfg=cfg)
     assert report.drifted and [f.label for f in report.drifted] == ["dirties-the-tree"]
@@ -154,7 +182,7 @@ def test_ctrl_c_terminates_the_whole_process_group(cfg, monkeypatch):
         pid = 4321
         def __init__(self, *a, **k):
             self.stdout = self
-        def __iter__(self):
+        def read1(self, size):
             events.append("reading")
             raise KeyboardInterrupt
         def terminate(self):
@@ -184,7 +212,7 @@ def test_an_unkillable_child_is_killed_after_the_grace_period(cfg, monkeypatch):
         pid = 99
         def __init__(self, *a, **k):
             self.stdout = self
-        def __iter__(self):
+        def read1(self, size):
             raise KeyboardInterrupt
         def wait(self, timeout=None):
             if timeout is not None:

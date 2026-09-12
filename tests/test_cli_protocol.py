@@ -39,7 +39,10 @@ def experiment_file(tmp_path, **overrides) -> str:
 
 def test_plan_freezes_the_schedule_before_anything_runs(tmp_path, capsys):
     out = tmp_path / "plan.json"
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps({"id": "native-linux-local", "version": 1}))
     assert main(["plan", experiment_file(tmp_path), "-o", str(out),
+                 "--profile", str(profile),
                  "--revision", "base=" + "a" * 40,
                  "--revision", "candidate=" + "b" * 40]) == EXIT_OK
     plan = json.loads(out.read_text())
@@ -51,8 +54,10 @@ def test_plan_freezes_the_schedule_before_anything_runs(tmp_path, capsys):
 def test_planning_the_same_experiment_twice_gives_the_same_digest(tmp_path):
     first, second = tmp_path / "a.json", tmp_path / "b.json"
     source = experiment_file(tmp_path)
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps({"id": "native-linux-local", "version": 1}))
     for out in (first, second):
-        main(["plan", source, "-o", str(out), "--revision", "base=" + "a" * 40,
+        main(["plan", source, "-o", str(out), "--profile", str(profile), "--revision", "base=" + "a" * 40,
               "--revision", "candidate=" + "b" * 40])
     assert digest(json.loads(first.read_text())) == digest(json.loads(second.read_text()))
 
@@ -115,7 +120,8 @@ def test_bundle_verify_reports_integrity_and_result(tmp_path, capsys):
     root, receipt = a_bundle(tmp_path)
     assert main(["bundle", "verify", str(root), receipt.line()]) == EXIT_OK
     out = capsys.readouterr().out
-    assert "integrity verified" in out and "result passed" in out
+    assert "integrity verified" in out and "result passed" not in out
+    assert "acceptance verification unavailable" in out
 
 
 def test_bundle_verify_never_claims_the_experiment_was_honest(tmp_path, capsys):
@@ -134,7 +140,7 @@ def test_require_pass_separates_genuine_from_passing(tmp_path, capsys):
     root, receipt = a_bundle(tmp_path, acceptance="failed")
     assert main(["bundle", "verify", str(root), receipt.line()]) == EXIT_OK
     assert main(["bundle", "verify", str(root), receipt.line(), "--require-pass"]) == EXIT_UNDECLARED
-    assert "result is failed" in capsys.readouterr().out
+    assert "acceptance verification unavailable" in capsys.readouterr().out
 
 
 def test_a_records_only_bundle_cannot_satisfy_an_evidence_complete_requirement(tmp_path):

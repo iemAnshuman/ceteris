@@ -423,11 +423,9 @@ class MLPerf(Adapter):
         return any("mlperf" in n or "loadgen" in n for n in names)
 
     def collect(self, plan, stdout, cwd, started):
-        candidates = [p for p in glob.glob(os.path.join(cwd, "**", "mlperf_log_summary.txt"), recursive=True)
-                      if os.path.getmtime(p) >= started - 1]
-        if not candidates:
+        path = plan.output or self._summary_path(cwd, started)
+        if path is None:
             return self._failed("no fresh mlperf_log_summary.txt under the working directory")
-        path = max(candidates, key=os.path.getmtime)
         try:
             text = open(path, encoding="utf-8").read()
         except OSError as exc:
@@ -446,7 +444,7 @@ class MLPerf(Adapter):
         return max(fresh, key=os.path.getmtime) if fresh else None
 
     def validity(self, plan, stdout, cwd, started):
-        path = self._summary_path(cwd, started)
+        path = plan.output or self._summary_path(cwd, started)
         if path is None:
             return ("unverified", "no fresh mlperf_log_summary.txt to read a result from")
         try:
@@ -473,8 +471,7 @@ def detect(argv: list[str]) -> Adapter | None:
     return None
 
 
-def ingest(path: str, fmt: str | None = None) -> dict[str, Field]:
-    """Explicit --ingest FILE[:format]: parse an output file without running."""
+def _import_adapter(path: str, fmt: str | None):
     if fmt is None:
         base = os.path.basename(path).lower()
         fmt = "mlperf" if "mlperf" in base else "jmh" if "jmh" in base else None
@@ -486,7 +483,36 @@ def ingest(path: str, fmt: str | None = None) -> dict[str, Field]:
                 fmt = "gbench" if data["benchmarks"] and "real_time" in data["benchmarks"][0] else "pytest"
             elif isinstance(data, list):
                 fmt = "jmh"
-    adapter = BY_NAME.get(fmt or "")
+    return BY_NAME.get(fmt or "")
+
+
+def ingest_evidence(path: str, fmt: str | None, before: tuple, started: float):
+    """Read a run-bound export together with its freshness and validity."""
+    plan = Plan("ingest", [], path, before=before)
+    stale = Adapter()._stale(plan)
+    if stale:
+        return Adapter()._failed(stale), {"path": path, "validity": "unavailable", "detail": stale}
+    adapter = _import_adapter(path, fmt)
+    if adapter is None:
+        detail = f"cannot determine format of {path}; pass FILE:format"
+        return {"ingest._adapter": unknown(detail, provenance="--ingest")}, {
+            "path": path, "validity": "unavailable", "detail": detail}
+    plan.adapter = adapter.name
+    cwd = os.path.dirname(os.path.abspath(path))
+    state, detail = adapter.validity(plan, "", cwd, started)
+    metrics = adapter.collect(plan, "", cwd, started)
+    if not metrics or any(f.is_indeterminate for f in metrics.values()):
+        state, detail = "unavailable", f"{path} did not produce readable measurements"
+    return metrics, {"path": path, "adapter": adapter.name, "validity": state,
+                     "detail": detail, "snapshot": list(snapshot(path))}
+
+
+def ingest(path: str, fmt: str | None = None) -> dict[str, Field]:
+    """Diagnostic parser for historical files; supplies no execution claim.
+
+    The runner uses ingest_evidence, which checks the producing execution.
+    """
+    adapter = _import_adapter(path, fmt)
     if adapter is None:
         return {"ingest._adapter": unknown(f"cannot determine format of {path}; pass FILE:format", provenance="--ingest")}
     plan = Plan(adapter.name, [], path)

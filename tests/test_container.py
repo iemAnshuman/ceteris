@@ -49,7 +49,8 @@ def test_two_unidentified_containers_do_not_certify(monkeypatch, cfg):
     clear(monkeypatch)
     monkeypatch.setattr(_container.os.path, "exists", lambda p: p == "/.singularity.d")
     a, b = deps._container_fields(), deps._container_fields()
-    report = compare([Fingerprint(a, {"label": "a"}), Fingerprint(b, {"label": "b"})], cfg=cfg)
+    from conftest import distinct_meta
+    report = compare([Fingerprint(a, distinct_meta("a")), Fingerprint(b, distinct_meta("b"))], cfg=cfg)
     assert report.exit_code == EXIT_INDETERMINATE
 
 

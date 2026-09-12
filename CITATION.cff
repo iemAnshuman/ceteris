@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: If ceteris gated a comparison in your work, please cite it.
 title: ceteris
-abstract: Wrap any benchmark; refuse the comparison unless it is valid. Captures the run environment, checks that only declared things differ and that the difference exceeds the noise floor, and issues a verifiable certificate.
+abstract: Record benchmark conditions and check captured evidence before comparing measurements. Refuses undeclared gating differences, failed runs, and incomplete required evidence. An optional signal check compares the measurement gap with the observed spread; certificates support offline verification.
 type: software
 authors:
   - family-names: Agrawal
@@ -9,7 +9,8 @@ authors:
 repository-code: https://github.com/iemAnshuman/ceteris
 url: https://github.com/iemAnshuman/ceteris
 license: MIT
-version: 0.3.0
+version: 0.4.0
+date-released: 2026-09-12
 keywords:
   - benchmarking
   - reproducibility

@@ -93,6 +93,23 @@ scheduler, or without `srun`, a multi-node job's node-local fields are
 | `output` | string, last 64 KiB of combined stdout/stderr |
 | `output_truncated` | bool |
 | `drift` | list of `{path, before, after}` for gating fields that changed between the before and after captures |
+| `drift_observed` | optional bool; explicit false blocks certification; absence in legacy records does not establish pre/post observation |
+| `output_bytes_total`, `output_bytes_dropped` | optional integer byte counts before UTF-8 decoding; output is a bounded tail |
+| `parent_run_id` | optional outer execution ID, used to deduplicate wrapper/plugin records |
+| `case_coverage` | optional expected/observed/missing case lists; missing or unreadable expected cases block comparison |
+| `exports` | optional per-import path, adapter, validity, detail, and post-run snapshot; stale, invalid, or unreadable imported evidence blocks comparison |
+
+New run producers assign `meta.execution_id` before launching a command or
+starting a pytest session. Copies and relabelled views preserve that ID. An
+outer wrapper's ID takes precedence over a plugin's own ID for independent
+sample counting. Legacy records without IDs use a content digest excluding
+label, source-file location, series, repeat number, and cached content hash;
+changing those fields does not create an independent sample. Unsigned IDs
+cannot prove producer honesty.
+
+Readers reject malformed fields and run exit codes. A `value` field must
+include `v` (explicit null remains representable); non-value states must not
+include it. A run's exit code must be an integer, excluding booleans.
 
 ### metrics
 
@@ -139,6 +156,9 @@ noise = max over configurations of (max - min) / median
 `gap <= noise` is *within noise*. Fewer samples: *unassessed*, never a guess.
 A metric whose value is a list (a pattern that matched several lines) is
 *unassessed* and says so.
+If any selected execution is missing a value for a metric, that metric is
+unassessed even when three other samples remain. Descriptive tables may show
+the readable subset with its actual count; it cannot satisfy `--require-signal`.
 
 ## Certificate line
 
@@ -156,6 +176,24 @@ ran under. `ceteris verify LINE FILES...` recomputes all of it; a
 `config` mismatch is reported as such rather than as a hash mismatch.
 Declarations are percent-encoded (`urllib.parse.quote`), reasons with
 nothing left unencoded, so any reason round-trips exactly.
+
+For records carrying `meta.execution_id` or any of `harness`, `exports`,
+`case_coverage`, `drift_observed`, `session`, or `parent_run_id` in `run`, the
+per-record digest additionally binds `execution_id` (null when absent) and
+`run_evidence` (the complete run object). This prevents editing required
+evidence or observation identity while retaining the certificate. Historical
+schema-2 examples without these keys keep their original digest. Certificates
+issued by earlier development builds for records with these keys must be
+reissued under the tightened rules.
+
+The experimental receipt-v3 bundle CLI verifies file integrity only. It
+returns no verified acceptance, reports `supported_semantics: false`, and
+refuses `--require-pass` or availability requirements above `records_only`.
+Plan/report/record bytes are hashed and parsed from the same bounded read;
+symlinks and symlinked ancestors inside the bundle are refused. A caller of
+the library can supply a trusted recomputation callback, but the CLI does not
+yet have an integrated schema-4 evaluator. Manifest availability labels alone
+never establish evidence completeness or reproduction readiness.
 
 Version 1 lines hashed only the gating fields and one boolean per metric;
 they are refused by `verify` rather than checked.

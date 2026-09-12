@@ -201,6 +201,12 @@ def noise_verdict(groups: Sequence[ConfigGroup], metric: str) -> NoiseVerdict:
             f"{', '.join(silent)} produced no value for this metric, so a gap "
             f"across the compared configurations cannot be assessed",
         )
+    missing = [f"{g.label}: {g.n - len(g.samples(metric))} of {g.n}"
+               for g in groups if len(g.samples(metric)) != g.n]
+    if missing:
+        return NoiseVerdict(metric, None, None, False, False,
+                            "missing measurements (" + "; ".join(missing) +
+                            "); every selected execution must contribute to this metric")
     thin = [s.label for s in per if s.n < MIN_REPEATS]
     if thin:
         return NoiseVerdict(

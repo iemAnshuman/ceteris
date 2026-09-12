@@ -127,12 +127,14 @@ def directory_manifest(root: "str | Path", *, include_empty: bool = False) -> di
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         dirnames.sort()
         here = Path(dirpath)
-        if include_empty and not filenames and not dirnames and here != root:
+        links = [name for name in dirnames if (here / name).is_symlink()]
+        dirnames[:] = [name for name in dirnames if name not in links]
+        if include_empty and not filenames and not dirnames and not links and here != root:
             entries.append({
                 "path": posixpath.join(*here.relative_to(root).parts),
                 "type": "directory",
             })
-        for name in sorted(filenames):
+        for name in sorted(filenames + links):
             absolute = here / name
             relative = absolute.relative_to(root)
             rel = posixpath.join(*relative.parts)

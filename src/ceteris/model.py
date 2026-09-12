@@ -185,6 +185,10 @@ class Fingerprint:
         if "exports" in self.run and (not isinstance(self.run["exports"], list)
                                       or any(not isinstance(x, dict) for x in self.run["exports"])):
             raise ValueError("run.exports must be an array of objects")
+        for export in self.run.get("exports", []):
+            if "metrics" in export and (not isinstance(export["metrics"], list)
+                                         or any(not isinstance(name, str) for name in export["metrics"])):
+                raise ValueError("export.metrics must be an array of strings")
         if "execution_id" in self.meta and (not isinstance(self.meta["execution_id"], str)
                                              or not self.meta["execution_id"].strip()):
             raise ValueError("meta.execution_id must be a nonempty string")

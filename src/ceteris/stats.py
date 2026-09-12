@@ -34,6 +34,10 @@ def unusable(v) -> str | None:
         return "boolean, not a measurement"
     if not isinstance(v, (int, float)):
         return f"not a number ({type(v).__name__})"
+    try:
+        float(v)
+    except OverflowError:
+        return "outside the finite floating-point range"
     if math.isnan(v):
         return "NaN"
     if math.isinf(v):

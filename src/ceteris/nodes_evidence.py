@@ -105,60 +105,74 @@ def collect_responses(expected_node_ids, responses, *, plan_digest: str,
     return sorted(evidence, key=lambda e: (e.node_id, e.stage))
 
 
+def _field_identity(entry, path):
+    """Semantic state and value, excluding diagnostic wording and provenance."""
+    if entry.status != "reported":
+        return {"node_status": entry.status}
+    field = entry.fields.get(path)
+    if field is None:
+        return {"node_status": "reported", "field": {"state": "missing"}}
+    if not isinstance(field, dict):
+        return {"node_status": "reported", "field": {"state": "malformed"}}
+    state = field.get("state")
+    if (state not in ("value", "unknown", "error", "not_applicable") or
+            (state == "value") != ("v" in field)):
+        return {"node_status": "reported", "field": {"state": "malformed"}}
+    semantic = {"state": state}
+    if state == "value":
+        semantic["v"] = field["v"]
+    return {"node_status": "reported", "field": semantic}
+
+
 def aggregate(evidence, path: str) -> dict:
-    """A deterministic view of one field across the allocation.
+    """Group by field state and typed value while retaining every node's evidence.
 
-    Grouping is on the typed canonical value, so provenance wording never
-    splits a group. The per-node map stays alongside, because a mix is not
-    a placement.
+    The existing value-only multiset remains available for fully valued fields.
+    ``state_multiset`` also records structural absence and indeterminate states.
+    Identity helpers always use the latter semantics.
     """
-    reported = [e for e in evidence if e.status == "reported"]
-    incomplete = [e for e in evidence if e.status != "reported"]
-    if incomplete:
-        return {
-            "path": path,
-            "state": "unknown",
-            "reason": "; ".join(
-                f"{e.node_id}: {e.status}" for e in sorted(incomplete, key=lambda e: e.node_id)),
-            "per_node": {e.node_id: None for e in incomplete},
-        }
-
+    evidence = list(evidence)
     groups: dict = {}
     per_node: dict = {}
-    for entry in reported:
-        field = entry.fields.get(path)
-        per_node[entry.node_id] = field
-        key = repr(typed_exact(None if field is None else field.get("v")))
-        groups.setdefault(key, {"value": None if field is None else field.get("v"),
-                                "nodes": []})
+    incomplete = []
+    for entry in evidence:
+        per_node[entry.node_id] = entry.fields.get(path)
+        semantic = _field_identity(entry, path)
+        field = semantic.get("field", {})
+        if entry.status != "reported" or field.get("state") not in ("value", "not_applicable"):
+            incomplete.append(f"{entry.node_id}: {entry.status if entry.status != 'reported' else field['state']}")
+        key = repr(typed_exact(semantic))
+        groups.setdefault(key, {"field": semantic, "value": field.get("v"), "nodes": []})
         groups[key]["nodes"].append(entry.node_id)
 
-    ordered = sorted(groups.values(), key=lambda g: (-len(g["nodes"]), repr(g["value"])))
+    ordered = sorted(groups.values(), key=lambda g: (-len(g["nodes"]), repr(typed_exact(g["field"]))))
     for group in ordered:
         group["nodes"].sort()
-    return {
-        "path": path,
-        "state": "value",
-        "homogeneous": len(ordered) == 1,
-        # The multiset view, for a policy that only cares about the mix.
-        "multiset": [[group["value"], len(group["nodes"])] for group in ordered],
-        # The placement view, for a policy that cares which node had what.
-        "per_node": per_node,
-        "groups": ordered,
+    state = "unknown" if incomplete or not evidence else (
+        "not_applicable" if all(g["field"].get("field", {}).get("state") == "not_applicable"
+                                for g in ordered) else "value")
+    view = {
+        "path": path, "state": state, "homogeneous": len(ordered) == 1,
+        "state_multiset": [[group["field"], len(group["nodes"])] for group in ordered],
+        "per_node": per_node, "groups": ordered,
     }
+    if all(g["field"].get("field", {}).get("state") == "value" for g in ordered) and evidence:
+        view["multiset"] = [[group["value"], len(group["nodes"])] for group in ordered]
+    if state == "unknown":
+        view["reason"] = "; ".join(sorted(incomplete)) or "no node evidence"
+    return view
 
 
 def placement_key(evidence, path: str) -> str:
-    """Identity of *which* node had *what*, for a policy that needs it."""
-    per_node = {e.node_id: (e.fields.get(path) or {}).get("v")
-                for e in evidence if e.status == "reported"}
-    return digest({"path": path, "placement": per_node})
+    """Identity of which node reported which state and value, including failures."""
+    placement = sorted((e.node_id, repr(typed_exact(_field_identity(e, path)))) for e in evidence)
+    return digest({"path": path, "placement": [list(item) for item in placement]})
 
 
 def multiset_key(evidence, path: str) -> str:
-    """Identity of the mix alone, ignoring which node had what."""
-    view = aggregate(evidence, path)
-    return digest({"path": path, "multiset": view.get("multiset")})
+    """Identity of the state/value mix alone, ignoring node IDs and input order."""
+    mix = sorted(repr(typed_exact(_field_identity(e, path))) for e in evidence)
+    return digest({"path": path, "multiset": mix})
 
 
 def inventory(expected_node_ids, evidence) -> dict:

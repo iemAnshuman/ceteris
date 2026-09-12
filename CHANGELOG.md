@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.1 (2026-09-12)
+
+Fix false passing comparisons involving required benchmark exports. In 0.4.0,
+a Google Benchmark export whose first case failed could be misidentified as
+pytest, and null or other unreadable measurements could retain a valid export
+claim. Upgrade and rerun affected `--ingest` captures and comparisons; do not
+rely on their existing passing certificates. See [the affected paths and
+recovery steps](docs/SUPPORT.md#041-correctness-update).
+
+- Detect Google Benchmark and pytest exports from all cases, rejecting mixed
+  or ambiguous formats. Preserve harness failures regardless of row order.
+- Reject null, boolean, nonnumeric and nonfinite required measurements. Keep
+  invalid repetitions visible and reject duplicate metric names instead of
+  overwriting cases. Recheck required numbers during comparison, including
+  older records whose export claim says they are valid.
+- Normalize protocol decimals and convert time units without ambient decimal
+  rounding. Preserve exact values through normalization and analysis.
+- Include directory symlinks and their link text in artifact manifests without
+  following them. Preserve node response and field states in aggregate views
+  and identity keys. Repeated campaign recovery retains abandoned-attempt
+  blockers and handles iterators of live attempts consistently.
+- Add regression and consistency checks for permutations, numeric boundaries,
+  decimal contexts, symlink targets, node states, and persisted recovery. Test
+  real CLI acceptance and refusal paths both in the suite and in a fresh wheel
+  installation before release publication. See [TESTING.md](docs/TESTING.md).
+
+The experimental API repairs do not expand the supported scope. Existing
+experimental node keys and directory manifests containing symlinks must be
+recomputed with 0.4.1.
+
 ## 0.4.0 (2026-09-12)
 
 This release tightens evidence checks in the capture/compare workflow. Planned

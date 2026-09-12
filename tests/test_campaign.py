@@ -35,6 +35,24 @@ def campaign(tmp_path):
     return c
 
 
+def test_recovery_is_idempotent_even_after_reloading_the_campaign(campaign):
+    campaign.journal("r1", "running")
+    first = cm.plan_resume(campaign, a_plan()).to_json()
+    assert first["abandoned"] == ["r1"] and first["problems"]
+    persisted = {p.name: p.read_bytes() for p in campaign.journal_dir.glob("*.json")}
+    reloaded = cm.Campaign(campaign.root, "c-1", digest(a_plan()))
+    for _ in range(3):
+        assert cm.plan_resume(reloaded, a_plan()).to_json() == first
+        assert {p.name: p.read_bytes() for p in campaign.journal_dir.glob("*.json")} == persisted
+
+
+def test_recovery_accepts_a_one_shot_iterable_of_live_attempts(campaign):
+    for run_id in ("r1", "r2"):
+        campaign.journal(run_id, "running")
+    result = cm.plan_resume(campaign, a_plan(), live_run_ids=iter(["r1", "r2"]))
+    assert result.abandoned == [] and result.problems == []
+
+
 # --- layout -------------------------------------------------------------------
 
 

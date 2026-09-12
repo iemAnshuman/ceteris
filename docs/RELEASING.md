@@ -11,24 +11,29 @@ channel wraps that sdist. Nothing is built by hand.
 2. Commit, then tag and push the tag:
 
    ```sh
-   git tag v0.4.0
-   git push origin main v0.4.0
+   git tag v0.4.1
+   git push origin main v0.4.1
    ```
 
 3. `.github/workflows/release.yml` first runs the reusable Ubuntu/macOS ×
    Python 3.9–3.14 test workflow against the tagged commit. Only after all
    matrix jobs pass does it build from the tag and check the
-   distributions with twine. It publishes to PyPI when trusted publishing
+   distributions with twine. It then installs the wheel in a fresh environment
+   and runs `scripts/smoke_release.py`, checking real CLI passing and refusal
+   paths before uploading any release assets. See [TESTING.md](TESTING.md).
+   It publishes to PyPI when trusted publishing
    is enabled and opens a GitHub release with the changelog section as its
    notes and the files attached. Watch it under Actions; if the PyPI step fails, fix
    the trusted-publisher setup below and re-run the job, do not upload by
    hand into the same version.
 4. On the GitHub release page tick *Publish this Action to the GitHub
-   Marketplace* the first time, so `iemAnshuman/ceteris@v0.4.0` is
+   Marketplace* the first time, so `iemAnshuman/ceteris@v0.4.1` is
    discoverable there. Move the `v0` tag when a compatible release lands:
 
    ```sh
-   git tag -f v0 v0.4.0 && git push -f origin v0
+   previous_v0=$(git ls-remote origin refs/tags/v0 | cut -f1)
+   git tag -f v0 v0.4.1
+   git push --force-with-lease="refs/tags/v0:$previous_v0" origin refs/tags/v0
    ```
 
    Only full `vMAJOR.MINOR.PATCH` tags trigger publishing. Moving `v0` does
@@ -50,9 +55,9 @@ Until then, wait for the tag's release workflow to finish successfully and
 upload its attached distributions using local PyPI credentials:
 
 ```sh
-gh release download v0.4.0 --repo iemAnshuman/ceteris --dir /tmp/ceteris-release-0.4.0
-python -m twine check /tmp/ceteris-release-0.4.0/*
-python -m twine upload --non-interactive /tmp/ceteris-release-0.4.0/*
+gh release download v0.4.1 --repo iemAnshuman/ceteris --dir /tmp/ceteris-release-0.4.1
+python -m twine check /tmp/ceteris-release-0.4.1/*
+python -m twine upload --non-interactive /tmp/ceteris-release-0.4.1/*
 ```
 
 Upload those exact files. Rebuilding the tag can change archive timestamps;

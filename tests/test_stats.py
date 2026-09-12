@@ -231,12 +231,12 @@ def test_an_overflowing_pattern_match_is_failed_extraction_not_infinity():
 
 
 def test_a_harness_export_of_nan_is_not_recorded_as_a_number():
-    from ceteris.adapters import _num
+    from ceteris.adapters import _measurement
 
     assert math.isnan(float("nan"))
-    assert _num("nan") == "nan"          # kept as evidence of what was exported
-    assert _num("inf") == "inf"
-    assert _num("12.5") == 12.5
+    assert _measurement("nan", provenance="fixture").is_indeterminate
+    assert _measurement("inf", provenance="fixture").is_indeterminate
+    assert _measurement("12.5", provenance="fixture").value == 12.5
 
 
 # --- F05: one execution contributes at most once ------------------------------

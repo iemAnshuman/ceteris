@@ -281,13 +281,19 @@ def plan_resume(campaign: Campaign, plan: dict, *, live_run_ids=()) -> ResumeSta
 
     committed = set(campaign.committed_runs())
     state.committed = sorted(committed)
+    live = set(live_run_ids)
 
     for entry_path in sorted(campaign.journal_dir.glob("*.json")):
         entry = loads(entry_path.read_bytes())
         run_id, entry_state = entry.get("run_id"), entry.get("state")
-        if entry_state in TERMINAL_STATES or run_id in committed:
+        if run_id in committed:
             continue
-        if run_id in set(live_run_ids):
+        if entry_state == "abandoned":
+            state.abandoned.append(run_id)
+            continue
+        if entry_state in TERMINAL_STATES:
+            continue
+        if run_id in live:
             continue
         state.abandoned.append(run_id)
         campaign.journal(run_id, "abandoned",

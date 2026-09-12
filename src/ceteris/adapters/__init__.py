@@ -58,19 +58,29 @@ def _scratch(prefix: str) -> str:
     return path
 
 
-def _num(x: Any) -> Any:
-    """A harness export value. NaN, infinity and booleans are refused here
-    rather than at the statistics, so the record shows failed extraction
-    instead of a number that quietly poisons every later comparison."""
+def _measurement(x: Any, *, provenance: str) -> Field:
+    """Keep failed extraction visible, including in an otherwise good export."""
     from ..stats import unusable
 
     if isinstance(x, bool):
-        return x
+        return unknown("boolean, not a measurement", provenance=provenance)
     try:
         parsed = float(x)
-    except (TypeError, ValueError):
-        return x
-    return parsed if unusable(parsed) is None else x
+    except (TypeError, ValueError, OverflowError):
+        return unknown("not a readable numeric measurement", provenance=provenance)
+    reason = unusable(parsed)
+    return unknown(reason, provenance=provenance) if reason else value(parsed, provenance=provenance)
+
+
+def _rows(data, key=None):
+    rows = data.get(key) if key and isinstance(data, dict) else data if key is None else None
+    return rows if isinstance(rows, list) and rows and all(isinstance(r, dict) for r in rows) else None
+
+
+def _insert_metric(out, key, field):
+    # Only Google Benchmark defines repetition folding here. Other duplicate
+    # names would silently overwrite a case, including an unreadable one.
+    out[key] = unknown("duplicate metric name in export", provenance=field.provenance) if key in out else field
 
 
 def snapshot(path: str | None) -> tuple:
@@ -227,7 +237,9 @@ class Hyperfine(Adapter):
             return self._failed(err)
         out: dict[str, Field] = {}
         prov = f"hyperfine --export-json ({'injected' if plan.added_output else 'given'})"
-        results = data.get("results", [])
+        results = _rows(data, "results")
+        if results is None:
+            return self._failed("no readable results in export")
         # Metric names must be stable across configurations, or the noise
         # floor cannot compare them. The command is the thing that varies
         # between configurations, so it must not be in the name; a single
@@ -236,7 +248,9 @@ class Hyperfine(Adapter):
             key = "hyperfine" if len(results) == 1 else f"hyperfine.{i}"
             for stat in ("median", "min"):
                 if stat in r:
-                    out[f"{key}.{stat}_s"] = value(_num(r[stat]), provenance=f"{prov}; command: {r.get('command', '?')}")
+                    out[f"{key}.{stat}_s"] = _measurement(r[stat], provenance=f"{prov}; command: {r.get('command', '?')}")
+            if not any(stat in r for stat in ("median", "min")):
+                out[f"{key}._adapter"] = unknown("result has no measurements", provenance=prov)
         return out or self._failed("no results in export")
 
 
@@ -265,19 +279,26 @@ class GoogleBenchmark(Adapter):
         # --benchmark_repetitions=N writes N iteration entries per name and
         # then the aggregates. Keying by name overwrote each with the next,
         # so only the last repetition survived. Take the median across them.
+        rows = _rows(data, "benchmarks")
+        if rows is None:
+            return self._failed("no readable benchmarks in output")
         runs: dict[str, list] = {}
-        for b in data.get("benchmarks", []):
+        for b in rows:
             if b.get("run_type") == "aggregate" or b.get("error_occurred"):
                 continue
             unit = b.get("time_unit", "ns")
-            runs.setdefault(f"gbench.{b.get('name', '?')}.real_time_{unit}", []).append(_num(b.get("real_time")))
+            runs.setdefault(f"gbench.{b.get('name', '?')}.real_time_{unit}", []).append(
+                _measurement(b.get("real_time"), provenance="--benchmark_out json"))
         out: dict[str, Field] = {}
         for key, xs in runs.items():
-            nums = [x for x in xs if isinstance(x, float)]
-            if len(nums) > 1:
-                out[key] = value(median(nums), provenance=f"--benchmark_out json, median of {len(nums)} repetitions")
+            if any(f.is_indeterminate for f in xs):
+                out[key] = unknown("one or more repetitions have unreadable measurements",
+                                   provenance="--benchmark_out json")
+            elif len(xs) > 1:
+                out[key] = _measurement(median(f.value for f in xs),
+                    provenance=f"--benchmark_out json, median of {len(xs)} repetitions")
             else:
-                out[key] = value(xs[0], provenance="--benchmark_out json")
+                out[key] = xs[0]
         return out or self._failed("no benchmarks in output")
 
 
@@ -288,7 +309,10 @@ class _GoogleBenchmarkValidity:
         data, err = self._read_json(plan.output)
         if err:
             return ("unverified", err)
-        failed = [b.get("name", "?") for b in data.get("benchmarks", []) if b.get("error_occurred")]
+        rows = _rows(data, "benchmarks")
+        if rows is None:
+            return ("unavailable", "no readable benchmarks in output")
+        failed = [str(b.get("name", "?")) for b in rows if b.get("error_occurred")]
         if failed:
             return ("invalid",
                     "Google Benchmark reported an error for " + ", ".join(failed[:3]))
@@ -323,9 +347,13 @@ class PytestBenchmark(Adapter):
         if err:
             return self._failed(err)
         out: dict[str, Field] = {}
-        for b in data.get("benchmarks", []):
-            st = b.get("stats", {})
-            out[f"pytest.{b.get('name', '?')}.median_s"] = value(_num(st.get("median")), provenance="--benchmark-json")
+        rows = _rows(data, "benchmarks")
+        if rows is None:
+            return self._failed("no readable benchmarks in output")
+        for b in rows:
+            st = b.get("stats")
+            _insert_metric(out, f"pytest.{b.get('name', '?')}.median_s",
+                _measurement(st.get("median") if isinstance(st, dict) else None, provenance="--benchmark-json"))
         return out or self._failed("no benchmarks in output")
 
 
@@ -348,11 +376,16 @@ class JMH(Adapter):
         if err:
             return self._failed(err)
         out: dict[str, Field] = {}
-        for b in data if isinstance(data, list) else []:
-            name = b.get("benchmark", "?").split(".")[-2:]
-            pm = b.get("primaryMetric", {})
-            unit = _slug(pm.get("scoreUnit", "")).replace("/", "_")
-            out[f"jmh.{'.'.join(name)}.{b.get('mode', 'score')}_{unit}"] = value(_num(pm.get("score")), provenance="jmh -rf json")
+        rows = _rows(data)
+        if rows is None:
+            return self._failed("no readable benchmarks in output")
+        for b in rows:
+            name = str(b.get("benchmark", "?")).split(".")[-2:]
+            pm = b.get("primaryMetric")
+            pm = pm if isinstance(pm, dict) else {}
+            unit = _slug(str(pm.get("scoreUnit", ""))).replace("/", "_")
+            _insert_metric(out, f"jmh.{'.'.join(name)}.{b.get('mode', 'score')}_{unit}",
+                _measurement(pm.get("score"), provenance="jmh -rf json"))
         return out or self._failed("no benchmarks in output")
 
 
@@ -371,7 +404,9 @@ class Criterion(Adapter):
             if err:
                 continue
             bench = os.path.relpath(os.path.dirname(os.path.dirname(path)), os.path.join(cwd, "target", "criterion"))
-            out[f"criterion.{_slug(bench)}.median_ns"] = value(_num(data.get("median", {}).get("point_estimate")), provenance=path)
+            estimate = data.get("median") if isinstance(data, dict) else None
+            _insert_metric(out, f"criterion.{_slug(bench)}.median_ns",
+                _measurement(estimate.get("point_estimate") if isinstance(estimate, dict) else None, provenance=path))
         return out or self._failed("no fresh target/criterion/*/new/estimates.json")
 
 
@@ -473,16 +508,22 @@ def detect(argv: list[str]) -> Adapter | None:
 
 def _import_adapter(path: str, fmt: str | None):
     if fmt is None:
-        base = os.path.basename(path).lower()
-        fmt = "mlperf" if "mlperf" in base else "jmh" if "jmh" in base else None
-        if fmt is None:
-            data, err = Adapter()._read_json(path)
-            if isinstance(data, dict) and "results" in data:
-                fmt = "hyperfine"
-            elif isinstance(data, dict) and "benchmarks" in data:
-                fmt = "gbench" if data["benchmarks"] and "real_time" in data["benchmarks"][0] else "pytest"
-            elif isinstance(data, list):
-                fmt = "jmh"
+        data, err = Adapter()._read_json(path)
+        if err and "mlperf" in os.path.basename(path).lower():
+            fmt = "mlperf"
+        elif isinstance(data, dict) and "results" in data and "benchmarks" not in data:
+            fmt = "hyperfine"
+        elif isinstance(data, dict) and "benchmarks" in data and "results" not in data:
+            rows = _rows(data, "benchmarks")
+            if rows:
+                google = [bool({"real_time", "cpu_time", "error_occurred", "run_type"} & row.keys()) for row in rows]
+                pytest = ["stats" in row for row in rows]
+                if all(google) and not any(pytest):
+                    fmt = "gbench"
+                elif all(pytest) and not any(google):
+                    fmt = "pytest"
+        elif isinstance(data, list):
+            fmt = "jmh"
     return BY_NAME.get(fmt or "")
 
 
@@ -501,10 +542,12 @@ def ingest_evidence(path: str, fmt: str | None, before: tuple, started: float):
     cwd = os.path.dirname(os.path.abspath(path))
     state, detail = adapter.validity(plan, "", cwd, started)
     metrics = adapter.collect(plan, "", cwd, started)
-    if not metrics or any(f.is_indeterminate for f in metrics.values()):
-        state, detail = "unavailable", f"{path} did not produce readable measurements"
+    from ..stats import unusable
+    if not metrics or any(not f.is_known or unusable(f.value) for f in metrics.values()):
+        if state != "invalid":
+            state, detail = "unavailable", f"{path} did not produce readable measurements"
     return metrics, {"path": path, "adapter": adapter.name, "validity": state,
-                     "detail": detail, "snapshot": list(snapshot(path))}
+                     "detail": detail, "metrics": sorted(metrics), "snapshot": list(snapshot(path))}
 
 
 def ingest(path: str, fmt: str | None = None) -> dict[str, Field]:

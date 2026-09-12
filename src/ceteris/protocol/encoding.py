@@ -299,6 +299,16 @@ def canonical_decimal(source: Any) -> str:
         raise CanonicalError(f"{text!r} is not a finite decimal")
 
     sign, digits, exponent = parsed.as_tuple()
+    if parsed.is_zero():
+        return "0"
+    # Trailing coefficient zeros are not significant. Removing them by tuple
+    # construction also makes an expanded 1e308 valid when read back in.
+    significant = len(digits)
+    while significant > 1 and digits[significant - 1] == 0:
+        significant -= 1
+    exponent += len(digits) - significant
+    digits = digits[:significant]
+    parsed = Decimal((sign, digits, exponent))
     if len(digits) > MAX_SIGNIFICANT_DIGITS:
         raise NumericLimitExceeded(
             f"{len(digits)} significant digits exceeds the limit of "
@@ -310,16 +320,9 @@ def canonical_decimal(source: Any) -> str:
             f"base-10 exponent {adjusted} exceeds the limit of {MAX_ABS_EXPONENT}"
         )
 
-    normalized = parsed.normalize()
-    # normalize() turns 100 into 1E+2; expand it back out.
-    if normalized == normalized.to_integral_value():
-        expanded = normalized.quantize(Decimal(1)) if abs(normalized.as_tuple().exponent) < 30 \
-            else Decimal(format(normalized, "f"))
-        out = format(expanded, "f")
-    else:
-        out = format(normalized, "f")
-    if out.startswith("-0") and Decimal(out) == 0:
-        out = "0"
+    # Formatting is exact; normalize/quantize apply the ambient context and
+    # can round before analysis ever constructs its exact fractions.
+    out = format(parsed, "f")
     if "." in out:
         out = out.rstrip("0").rstrip(".")
     if out in ("", "-"):

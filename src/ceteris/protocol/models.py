@@ -223,7 +223,8 @@ def convert(estimate: str, unit: str, to_unit: str) -> str:
     from decimal import Decimal
 
     shift = _TIME_IN_SECONDS[unit] - _TIME_IN_SECONDS[to_unit]
-    return canonical_decimal(Decimal(canonical_decimal(estimate)).scaleb(shift))
+    sign, digits, exponent = Decimal(canonical_decimal(estimate)).as_tuple()
+    return canonical_decimal(Decimal((sign, digits, exponent + shift)))
 
 
 @dataclass(frozen=True)

@@ -27,6 +27,11 @@ jobs:
           v=$(python -c "import re,pathlib; print(re.search(r'__version__ = \"(.+)\"', pathlib.Path('src/ceteris/__init__.py').read_text()).group(1))")
           test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} but __version__ is $v"; exit 1; }
       - run: python -m build && python -m twine check dist/*
+      - name: Test the installed wheel before publishing
+        run: |
+          python -m venv /tmp/ceteris-release-check
+          /tmp/ceteris-release-check/bin/python -m pip install --no-index --no-deps dist/*.whl
+          /tmp/ceteris-release-check/bin/python -I scripts/smoke_release.py
       - uses: actions/upload-artifact@v4
         with:
           name: dist

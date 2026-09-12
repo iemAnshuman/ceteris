@@ -229,13 +229,26 @@ class Report:
             coverage = fp.run.get("case_coverage") or {}
             missing = sorted(set(coverage.get("missing", [])) | {
                 case for case in coverage.get("expected", [])
-                if case not in fp.metrics or not fp.metrics[case].is_known})
+                if case not in fp.metrics or not fp.metrics[case].is_known
+                or stats.unusable(fp.metrics[case].value)})
             if missing or (coverage.get("expected") and coverage.get("state") != "sufficient"):
                 out.append((fp, "required benchmark cases are missing: " +
                             ", ".join(missing)))
             for export in fp.run.get("exports", []):
-                if export.get("validity") in ("invalid", "unavailable"):
+                if export.get("validity") not in ("valid", "unverified"):
                     out.append((fp, str(export.get("detail", "invalid export evidence"))))
+                    continue
+                # Recheck the numbers even for records produced before the
+                # importer validated them. Older exports did not list their
+                # metric names; their adapter prefix identifies that evidence.
+                names = export.get("metrics")
+                if names is None:
+                    prefix = str(export.get("adapter", "ingest")) + "."
+                    names = [name for name in fp.metrics if name.startswith(prefix)]
+                if not names or any(name not in fp.metrics or not fp.metrics[name].is_known
+                                    or stats.unusable(fp.metrics[name].value) for name in names):
+                    out.append((fp, "required export has unreadable measurements: " +
+                                str(export.get("path", "<unknown>"))))
         return out
 
 
